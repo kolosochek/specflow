@@ -34,7 +34,6 @@
     "@trpc/react-query": "^11",
     "@trpc/server": "^11",
     "better-sqlite3": "^11",
-    "chokidar": "^4.0.3",
     "drizzle-orm": "^0.45",
     "express": "^5",
     "gray-matter": "^4.0.3",
