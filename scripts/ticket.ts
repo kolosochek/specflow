@@ -10,6 +10,7 @@ import {
 } from '../src/backlog/state.js';
 import { classifyFile } from '../src/backlog/parser.js';
 import { checkEpic, checkMilestone, checkWave, checkSlice } from '../src/backlog/checklist.js';
+import { selectVcs } from '../src/backlog/vcs-select.js';
 import { eq } from 'drizzle-orm';
 import matter from 'gray-matter';
 import { z } from 'zod';
@@ -22,6 +23,8 @@ const TEMPLATES_DIR = join(BACKLOG_DIR, 'templates');
 const { db, close } = createBacklogDb(DB_PATH);
 
 const [, , command, ...args] = process.argv;
+
+const vcs = selectVcs(args, process.env, { cwd: PROJECT_ROOT });
 
 try {
   switch (command) {
