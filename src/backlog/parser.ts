@@ -12,6 +12,12 @@ const yamlDateString = z.union([
 
 // --- Zod schemas for frontmatter validation ---
 
+const epicFrontmatter = z.object({
+  title: z.string(),
+  created: yamlDateString,
+  status: z.enum(['empty', 'epic_defined']).default('empty'),
+});
+
 const milestoneFrontmatter = z.object({
   title: z.string(),
   created: yamlDateString,
@@ -32,10 +38,11 @@ const sliceFrontmatter = z.object({
 
 // --- File classification ---
 
-export type FileType = 'milestone' | 'wave' | 'slice';
+export type FileType = 'epic' | 'milestone' | 'wave' | 'slice';
 
 export function classifyFile(filePath: string): FileType | null {
   const name = basename(filePath);
+  if (name === 'epic.md') return 'epic';
   if (name === 'milestone.md') return 'milestone';
   if (name === 'wave.md') return 'wave';
   if (name.startsWith('S') && name.endsWith('.md') && /^S\d{3}/.test(name)) return 'slice';
@@ -44,52 +51,91 @@ export function classifyFile(filePath: string): FileType | null {
 
 // --- ID derivation from directory path ---
 
-function extractPrefix(segment: string): string | null {
+function extractPrefix(segment: string | undefined): string | null {
+  if (typeof segment !== 'string') return null;
   const dashIndex = segment.indexOf('-');
   if (dashIndex === -1) return null;
   const prefix = segment.slice(0, dashIndex);
-  if (prefix.length === 4 && /^[MWS]\d{3}$/.test(prefix)) return prefix;
+  if (prefix.length === 4 && /^[EMWS]\d{3}$/.test(prefix)) return prefix;
   return null;
 }
 
+/**
+ * Derive composite ID from filesystem path.
+ *
+ * Path structure (4-level hierarchy):
+ *   backlog/E001-<slug>/epic.md
+ *   backlog/E001-<slug>/milestones/M001-<slug>/milestone.md
+ *   backlog/E001-<slug>/milestones/M001-<slug>/waves/W001-<slug>/wave.md
+ *   backlog/E001-<slug>/milestones/M001-<slug>/waves/W001-<slug>/slices/S001-<slug>.md
+ *
+ * Composite IDs:
+ *   Epic       → E001
+ *   Milestone  → E001/M001
+ *   Wave       → E001/M001/W001
+ *   Slice      → E001/M001/W001/S001
+ */
 export function deriveIdFromPath(filePath: string, type: FileType): string | null {
   const parts = filePath.split('/');
 
+  if (type === 'epic') {
+    // backlog/E001-foundation/epic.md -> E001
+    const epicDir = parts[parts.length - 2];
+    return extractPrefix(epicDir);
+  }
+
   if (type === 'milestone') {
-    // backlog/M001-redesign-auth/milestone.md -> M001
+    // backlog/E001-foo/milestones/M001-bar/milestone.md -> E001/M001
     const milestoneDir = parts[parts.length - 2];
-    return extractPrefix(milestoneDir);
+    const epicDir = parts[parts.length - 4];
+    const e = extractPrefix(epicDir);
+    const m = extractPrefix(milestoneDir);
+    if (!e || !m) return null;
+    return `${e}/${m}`;
   }
 
   if (type === 'wave') {
-    // backlog/M001-auth/waves/W001-refactor/wave.md -> M001/W001
+    // backlog/E001-foo/milestones/M001-bar/waves/W001-baz/wave.md -> E001/M001/W001
     const waveDir = parts[parts.length - 2];
     const milestoneDir = parts[parts.length - 4];
+    const epicDir = parts[parts.length - 6];
+    const e = extractPrefix(epicDir);
     const m = extractPrefix(milestoneDir);
     const w = extractPrefix(waveDir);
-    if (!m || !w) return null;
-    return `${m}/${w}`;
+    if (!e || !m || !w) return null;
+    return `${e}/${m}/${w}`;
   }
 
   if (type === 'slice') {
-    // backlog/M001-auth/waves/W001-refactor/slices/S001-extract.md -> M001/W001/S001
+    // backlog/E.../milestones/M.../waves/W.../slices/S001-x.md -> E001/M001/W001/S001
     const sliceFile = basename(filePath, '.md');
     const waveDir = parts[parts.length - 3];
     const milestoneDir = parts[parts.length - 5];
+    const epicDir = parts[parts.length - 7];
+    const e = extractPrefix(epicDir);
     const m = extractPrefix(milestoneDir);
     const w = extractPrefix(waveDir);
     const s = extractPrefix(sliceFile);
-    if (!m || !w || !s) return null;
-    return `${m}/${w}/${s}`;
+    if (!e || !m || !w || !s) return null;
+    return `${e}/${m}/${w}/${s}`;
   }
 
   return null;
 }
 
-// --- Parse functions ---
+// --- Parse types ---
+
+export interface ParsedEpic {
+  id: string;
+  title: string;
+  path: string;
+  created: string;
+  status: string;
+}
 
 export interface ParsedMilestone {
   id: string;
+  epicId: string;
   title: string;
   path: string;
   created: string;
@@ -114,14 +160,33 @@ export interface ParsedSlice {
   status: string;
 }
 
+// --- Parse functions ---
+
+export function parseEpic(content: string, filePath: string): ParsedEpic | null {
+  const { data } = matter(content);
+  const parsed = epicFrontmatter.safeParse(data);
+  if (!parsed.success) return null;
+  const id = deriveIdFromPath(filePath, 'epic');
+  if (!id) return null;
+  return {
+    id,
+    title: parsed.data.title,
+    path: filePath,
+    created: parsed.data.created,
+    status: parsed.data.status,
+  };
+}
+
 export function parseMilestone(content: string, filePath: string): ParsedMilestone | null {
   const { data } = matter(content);
   const parsed = milestoneFrontmatter.safeParse(data);
   if (!parsed.success) return null;
   const id = deriveIdFromPath(filePath, 'milestone');
   if (!id) return null;
+  const epicId = id.split('/')[0];
   return {
     id,
+    epicId,
     title: parsed.data.title,
     path: filePath,
     created: parsed.data.created,
@@ -135,7 +200,8 @@ export function parseWave(content: string, filePath: string): ParsedWave | null 
   if (!parsed.success) return null;
   const id = deriveIdFromPath(filePath, 'wave');
   if (!id) return null;
-  const milestoneId = id.split('/')[0];
+  const idParts = id.split('/');
+  const milestoneId = `${idParts[0]}/${idParts[1]}`;
   return {
     id,
     milestoneId,
@@ -152,8 +218,8 @@ export function parseSlice(content: string, filePath: string): ParsedSlice | nul
   if (!parsed.success) return null;
   const id = deriveIdFromPath(filePath, 'slice');
   if (!id) return null;
-  const parts = id.split('/');
-  const waveId = `${parts[0]}/${parts[1]}`;
+  const idParts = id.split('/');
+  const waveId = `${idParts[0]}/${idParts[1]}/${idParts[2]}`;
   return {
     id,
     waveId,

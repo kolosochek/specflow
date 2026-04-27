@@ -20,17 +20,18 @@ Before doing anything else, an agent must:
 
 ## 1 — Picking up a fresh ticket
 
-When instructed to work on `M001/W001`:
+When instructed to work on `E001/M001/W001`:
 
 | Step | Action | Failure mode |
 | ---- | ------ | ------------ |
-| ① | `ticket show M001/W001`, verify execution status is `ready_to_dev` | If not `ready_to_dev` → STOP, report status to the human. |
-| ② | Locate `backlog/M001-*/waves/W001-*/`, read `wave.md` | Read in full before proceeding. |
-| ③ | Read every `slices/S\d{3}-*.md` in numerical order | This is the execution plan. |
-| ④ | `ticket claim M001/W001 <agent-id>` | Status flips to `claimed`. |
-| ⑤ | `git worktree add ../<project>-agent-M001-W001 -b agent/M001-W001` | Branch convention is **non-optional**. |
-| ⑥ | `ticket status M001/W001 in_progress` | Status flips to `in_progress`. |
-| ⑦ | `cd` into the worktree | All code work, tests, and commits happen here from now on. |
+| ① | `ticket show E001/M001/W001`, verify execution status is `ready_to_dev` | If not `ready_to_dev` → STOP, report status to the human. |
+| ② | **Climb for context first.** Read parent `epic.md` then parent `milestone.md`. | Skipping these means making decisions without knowing the strategic frame. |
+| ③ | Locate `backlog/E001-*/milestones/M001-*/waves/W001-*/`, read `wave.md` | Read in full before proceeding. |
+| ④ | Read every `slices/S\d{3}-*.md` in numerical order | This is the execution plan. |
+| ⑤ | `ticket claim E001/M001/W001 <agent-id>` | Status flips to `claimed`. |
+| ⑥ | `git worktree add ../<project>-agent-E001-M001-W001 -b agent/E001-M001-W001` | Branch convention is **non-optional**. Composite ID slashes become hyphens in the branch name. |
+| ⑦ | `ticket status E001/M001/W001 in_progress` | Status flips to `in_progress`. |
+| ⑧ | `cd` into the worktree | All code work, tests, and commits happen here from now on. |
 
 After step ⑦ the agent works inside the worktree, but `ticket` invocations continue to target the main project.
 
@@ -106,10 +107,10 @@ The `SCENARIO->INPUT->EXPECTED` comment block is preserved at the top of every t
 ### Commit message format
 
 ```
-[M001/W001/S001] add session table + FK constraint
+[E001/M001/W001/S001] add session table + FK constraint
 ```
 
-- Bracketed prefix is the slice's composite ID.
+- Bracketed prefix is the slice's full 4-level composite ID.
 - Body is a one-line description in imperative mood.
 - One commit per slice. **No bundling.**
 
@@ -176,13 +177,13 @@ If a slice contains ambiguous, contradictory, or unverifiable requirements:
 
 ```
 project root:    /repos/myproject
-worktree:        /repos/myproject-agent-M001-W001
-branch:          agent/M001-W001
+worktree:        /repos/myproject-agent-E001-M001-W001
+branch:          agent/E001-M001-W001
 ```
 
 - One worktree per active wave.
 - One branch per active wave.
-- Branch naming `agent/<M-id>-<W-id>` — slashes replaced with hyphens.
+- Branch naming `agent/<E-id>-<M-id>-<W-id>` — composite ID slashes replaced with hyphens.
 - Worktree path is sibling of project root, suffixed with the same id.
 
 These conventions are enforced by **`AGENTS.md`**, not by the CLI. The CLI's `reset` command prints reminder commands to clean them up, but doesn't run them.

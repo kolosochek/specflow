@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkMilestone, checkWave, checkSlice } from '../checklist.js';
+import { checkEpic, checkMilestone, checkWave, checkSlice } from '../checklist.js';
 import type { CheckResult } from '../checklist.js';
 
 // ---------------------------------------------------------------------------
@@ -354,5 +354,109 @@ describe('checkSlice', () => {
 
     expect(result.ok).toBe(false);
     expect(passed(result, 'Cases count >= Requirements count')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkEpic
+// ---------------------------------------------------------------------------
+
+describe('checkEpic', () => {
+  const completeEpic = [
+    '---',
+    'title: Foundation hardening',
+    'created: 2026-04-27',
+    '---',
+    '',
+    '## Goal',
+    'Apply specflow to itself, removing structural friction surfaced in v0.1.',
+    '',
+    '## Success criteria',
+    '- Spec ↔ code drift surfaced via automated check',
+    '- CLI no longer hard-couples to git in core operations',
+    '- CI runs typecheck + unit tests on every push',
+  ].join('\n');
+
+  it('passes for a complete epic', () => {
+    // SCENARIO: well-formed epic with all required sections
+    // INPUT: markdown with title, created date, Goal section with text,
+    //        Success criteria section with 3 bullet items
+    // EXPECTED: ok === true, every check.passed === true
+    const result = checkEpic(completeEpic);
+
+    expect(result.ok).toBe(true);
+    expect(result.checks.every((c) => c.passed)).toBe(true);
+  });
+
+  it('fails when title is template default', () => {
+    // SCENARIO: user left the template title unchanged
+    // INPUT: title === "Epic title"
+    // EXPECTED: ok === false, "title is not template default" check fails
+    const content = completeEpic.replace(
+      'title: Foundation hardening',
+      'title: Epic title',
+    );
+    const result = checkEpic(content);
+
+    expect(result.ok).toBe(false);
+    expect(passed(result, 'title is not template default')).toBe(false);
+  });
+
+  it('fails when Goal is empty', () => {
+    // SCENARIO: epic with empty Goal section
+    // INPUT: '## Goal' header followed immediately by '## Success criteria'
+    // EXPECTED: ok === false, "## Goal has content" fails
+    const content = [
+      '---',
+      'title: Foundation hardening',
+      'created: 2026-04-27',
+      '---',
+      '',
+      '## Goal',
+      '',
+      '## Success criteria',
+      '- One',
+      '- Two',
+    ].join('\n');
+    const result = checkEpic(content);
+
+    expect(result.ok).toBe(false);
+    expect(passed(result, '## Goal has content')).toBe(false);
+  });
+
+  it('fails when Success criteria has fewer than 2 bullets', () => {
+    // SCENARIO: epic with single success criterion
+    // INPUT: Success criteria section with one bullet
+    // EXPECTED: ok === false, "Success criteria >= 2 items" fails
+    const content = [
+      '---',
+      'title: Foundation hardening',
+      'created: 2026-04-27',
+      '---',
+      '',
+      '## Goal',
+      'A goal.',
+      '',
+      '## Success criteria',
+      '- Only one',
+    ].join('\n');
+    const result = checkEpic(content);
+
+    expect(result.ok).toBe(false);
+    expect(passed(result, 'Success criteria >= 2 items')).toBe(false);
+  });
+
+  it('fails when created is missing', () => {
+    // SCENARIO: created field absent from frontmatter
+    // INPUT: epic with title and Goal but no created field
+    // EXPECTED: ok === false, "created is a valid date" fails
+    const content = completeEpic
+      .split('\n')
+      .filter((line) => !line.startsWith('created:'))
+      .join('\n');
+    const result = checkEpic(content);
+
+    expect(result.ok).toBe(false);
+    expect(passed(result, 'created is a valid date')).toBe(false);
   });
 });

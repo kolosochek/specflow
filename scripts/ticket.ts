@@ -5,10 +5,11 @@ import { createBacklogDb, schema } from '../src/backlog/db.js';
 import { fullSync, targetedSync } from '../src/backlog/sync.js';
 import {
   promoteWave, claimWave, setWaveStatus, completeWave,
-  resetWave, markSliceDone, getWaveDetail, deriveMilestoneStatus,
+  resetWave, markSliceDone, getWaveDetail,
+  deriveMilestoneStatus, deriveEpicStatus,
 } from '../src/backlog/state.js';
 import { classifyFile } from '../src/backlog/parser.js';
-import { checkMilestone, checkWave, checkSlice } from '../src/backlog/checklist.js';
+import { checkEpic, checkMilestone, checkWave, checkSlice } from '../src/backlog/checklist.js';
 import { eq } from 'drizzle-orm';
 import matter from 'gray-matter';
 import { z } from 'zod';
@@ -45,49 +46,84 @@ try {
   close();
 }
 
+// --- Helpers for path lookup with 4-level hierarchy ---
+
+function epicDir(epicId: string): string | null {
+  const dirs = globSync(`${epicId}-*/`, { cwd: BACKLOG_DIR });
+  return dirs.length > 0 ? join(BACKLOG_DIR, dirs[0]) : null;
+}
+
+function milestoneDir(epicId: string, milestoneId: string): string | null {
+  const dirs = globSync(`${epicId}-*/milestones/${milestoneId}-*/`, { cwd: BACKLOG_DIR });
+  return dirs.length > 0 ? join(BACKLOG_DIR, dirs[0]) : null;
+}
+
+function waveDir(epicId: string, milestoneId: string, waveId: string): string | null {
+  const dirs = globSync(
+    `${epicId}-*/milestones/${milestoneId}-*/waves/${waveId}-*/`,
+    { cwd: BACKLOG_DIR },
+  );
+  return dirs.length > 0 ? join(BACKLOG_DIR, dirs[0]) : null;
+}
+
+function sliceFile(epicId: string, milestoneId: string, waveId: string, sliceId: string): string | null {
+  const files = globSync(
+    `${epicId}-*/milestones/${milestoneId}-*/waves/${waveId}-*/slices/${sliceId}-*.md`,
+    { cwd: BACKLOG_DIR },
+  );
+  return files.length > 0 ? join(BACKLOG_DIR, files[0]) : null;
+}
+
 // --- Viewing commands ---
 
 function cmdList() {
   const statusFilter = args.includes('--status') ? args[args.indexOf('--status') + 1] : null;
 
-  const milestones = db.select().from(schema.milestones).all();
+  const epics = db.select().from(schema.epics).all();
 
-  for (const m of milestones) {
-    const mStatus = deriveMilestoneStatus(db, m.id);
-    console.log(`\n${m.id} ${m.title} [${mStatus}]`);
+  for (const e of epics) {
+    const eStatus = deriveEpicStatus(db, e.id);
+    console.log(`\n${e.id} ${e.title} [${eStatus}]`);
 
-    const waves = db.select().from(schema.waves).where(eq(schema.waves.milestoneId, m.id)).all();
+    const milestones = db.select().from(schema.milestones).where(eq(schema.milestones.epicId, e.id)).all();
 
-    for (const w of waves) {
-      const ws = db.select().from(schema.waveState).where(eq(schema.waveState.waveId, w.id)).get();
-      const wStatus = ws?.status ?? 'draft';
+    for (const m of milestones) {
+      const mStatus = deriveMilestoneStatus(db, m.id);
+      console.log(`  ${m.id} ${m.title} [${mStatus}]`);
 
-      if (statusFilter && wStatus !== statusFilter) continue;
+      const waves = db.select().from(schema.waves).where(eq(schema.waves.milestoneId, m.id)).all();
 
-      const slices = db.select().from(schema.slices).where(eq(schema.slices.waveId, w.id)).all();
-      const sliceStates = db.select({ status: schema.sliceState.status })
-        .from(schema.sliceState)
-        .innerJoin(schema.slices, eq(schema.slices.id, schema.sliceState.sliceId))
-        .where(eq(schema.slices.waveId, w.id))
-        .all();
-      const doneCount = sliceStates.filter(r => r.status === 'done').length;
+      for (const w of waves) {
+        const ws = db.select().from(schema.waveState).where(eq(schema.waveState.waveId, w.id)).get();
+        const wStatus = ws?.status ?? 'draft';
 
-      const wave = db.select({ status: schema.waves.status }).from(schema.waves).where(eq(schema.waves.id, w.id)).get();
-      const contentStatus = wave?.status ?? 'empty';
+        if (statusFilter && wStatus !== statusFilter) continue;
 
-      const sliceDefRows = db.select({ id: schema.slices.id, status: schema.slices.status })
-        .from(schema.slices).where(eq(schema.slices.waveId, w.id)).all();
-      const sliceStatusMap = new Map(sliceDefRows.map((r) => [r.id, r.status]));
-      const definedCount = slices.reduce((count, s) => {
-        return count + (sliceStatusMap.get(s.id) === 'slice_defined' ? 1 : 0);
-      }, 0);
+        const slices = db.select().from(schema.slices).where(eq(schema.slices.waveId, w.id)).all();
+        const sliceStates = db.select({ status: schema.sliceState.status })
+          .from(schema.sliceState)
+          .innerJoin(schema.slices, eq(schema.slices.id, schema.sliceState.sliceId))
+          .where(eq(schema.slices.waveId, w.id))
+          .all();
+        const doneCount = sliceStates.filter(r => r.status === 'done').length;
 
-      const contentReady = contentStatus === 'wave_defined' && definedCount === slices.length;
-      const contentLabel = contentReady ? 'content-ready' : contentStatus;
-      const definedLabel = `(${definedCount}/${slices.length} defined)`;
+        const wave = db.select({ status: schema.waves.status }).from(schema.waves).where(eq(schema.waves.id, w.id)).get();
+        const contentStatus = wave?.status ?? 'empty';
 
-      const assignee = ws?.assignedTo ? ` (${ws.assignedTo})` : '';
-      console.log(`  ${w.id.includes('/') ? '├─' : '└─'} ${w.id} ${w.title}  ${contentLabel} ${definedLabel}  ${wStatus}${assignee}  ${doneCount}/${slices.length} slices`);
+        const sliceDefRows = db.select({ id: schema.slices.id, status: schema.slices.status })
+          .from(schema.slices).where(eq(schema.slices.waveId, w.id)).all();
+        const sliceStatusMap = new Map(sliceDefRows.map((r) => [r.id, r.status]));
+        const definedCount = slices.reduce((count, s) => {
+          return count + (sliceStatusMap.get(s.id) === 'slice_defined' ? 1 : 0);
+        }, 0);
+
+        const contentReady = contentStatus === 'wave_defined' && definedCount === slices.length;
+        const contentLabel = contentReady ? 'content-ready' : contentStatus;
+        const definedLabel = `(${definedCount}/${slices.length} defined)`;
+
+        const assignee = ws?.assignedTo ? ` (${ws.assignedTo})` : '';
+        console.log(`    └─ ${w.id} ${w.title}  ${contentLabel} ${definedLabel}  ${wStatus}${assignee}  ${doneCount}/${slices.length} slices`);
+      }
     }
   }
 }
@@ -95,7 +131,7 @@ function cmdList() {
 function cmdShow(id: string) {
   if (!id) { console.error('Usage: ticket show <wave-id>'); process.exit(1); }
 
-  // Targeted sync for this wave's milestone
+  // Targeted sync for this wave's epic
   targetedSync(db, BACKLOG_DIR, id);
 
   const detail = getWaveDetail(db, id);
@@ -110,7 +146,7 @@ function cmdShow(id: string) {
   console.log(`PR: ${detail.pr ?? '—'}`);
   console.log(`\nSlices:`);
   for (const s of detail.slices) {
-    const execIcon = s.status === 'done' ? '\u2713' : '\u25a1';
+    const execIcon = s.status === 'done' ? '✓' : '□';
     const sl = db.select({ status: schema.slices.status }).from(schema.slices).where(eq(schema.slices.id, s.id)).get();
     const contentLabel = sl?.status ?? 'empty';
     console.log(`  ${execIcon} ${s.id} ${s.title} [${contentLabel}]${s.status === 'done' ? ' [done]' : ''}`);
@@ -167,7 +203,7 @@ function cmdReset(id: string) {
   console.log(`Wave ${id} reset to draft`);
 
   // Print cleanup warnings
-  const waveSlug = id.replace('/', '-');
+  const waveSlug = id.replaceAll('/', '-');
   const projectName = basename(PROJECT_ROOT);
   console.log(`\n⚠ Worktree may still exist. Run: git worktree remove ../${projectName}-agent-${waveSlug}`);
   console.log(`⚠ Branch may still exist. Run: git branch -D agent/${waveSlug}`);
@@ -190,67 +226,102 @@ function nextNumber(dir: string, prefix: string): string {
   return String(max + 1).padStart(3, '0');
 }
 
+function readTemplate(name: string, fallback: string): string {
+  const p = join(TEMPLATES_DIR, name);
+  return existsSync(p) ? readFileSync(p, 'utf-8') : fallback;
+}
+
+function fillTemplate(template: string, title: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  return template
+    .replace(/^title:.*$/m, `title: ${title}`)
+    .replace(/^created:.*$/m, `created: ${today}`);
+}
+
+function gitCommit(addPath: string, message: string): void {
+  execSync(`git add "${addPath}" && git commit -m "${message}"`, { cwd: PROJECT_ROOT });
+}
+
 function cmdCreate(type: string, createArgs: string[]) {
-  if (!type) { console.error('Usage: ticket create <milestone|wave|slice> ...'); process.exit(1); }
+  if (!type) { console.error('Usage: ticket create <epic|milestone|wave|slice> ...'); process.exit(1); }
 
-  if (type === 'milestone') {
+  if (type === 'epic') {
     const title = createArgs[0];
-    if (!title) { console.error('Usage: ticket create milestone "<title>"'); process.exit(1); }
-    const num = nextNumber(BACKLOG_DIR, 'M');
+    if (!title) { console.error('Usage: ticket create epic "<title>"'); process.exit(1); }
+    mkdirSync(BACKLOG_DIR, { recursive: true });
+    const num = nextNumber(BACKLOG_DIR, 'E');
     const slug = slugify(title);
-    const id = `M${num}`;
-    const dirName = `${id}-${slug}`;
-    const dir = join(BACKLOG_DIR, dirName);
-    mkdirSync(join(dir, 'waves'), { recursive: true });
+    const id = `E${num}`;
+    const dir = join(BACKLOG_DIR, `${id}-${slug}`);
+    mkdirSync(join(dir, 'milestones'), { recursive: true });
 
-    const template = existsSync(join(TEMPLATES_DIR, 'milestone.md'))
-      ? readFileSync(join(TEMPLATES_DIR, 'milestone.md'), 'utf-8')
-      : `---\ntitle: ${title}\ncreated: ${new Date().toISOString().slice(0, 10)}\n---\n\n## Goal\n\n## Success criteria\n`;
-
-    const content = template.replace(/^title:.*$/m, `title: ${title}`).replace(/^created:.*$/m, `created: ${new Date().toISOString().slice(0, 10)}`);
-    writeFileSync(join(dir, 'milestone.md'), content);
-    execSync(`git add "${dir}" && git commit -m "[backlog] create ${id}: ${title}"`, { cwd: PROJECT_ROOT });
+    const fallback = `---\ntitle: ${title}\ncreated: ${new Date().toISOString().slice(0, 10)}\nstatus: empty\n---\n\n## Goal\n\n## Success criteria\n`;
+    const content = fillTemplate(readTemplate('epic.md', fallback), title);
+    writeFileSync(join(dir, 'epic.md'), content);
+    gitCommit(dir, `[backlog] create ${id}: ${title}`);
     fullSync(db, BACKLOG_DIR);
     console.log(`Created ${id}: ${title}`);
 
-  } else if (type === 'wave') {
-    const milestoneId = createArgs[0];
+  } else if (type === 'milestone') {
+    const epicId = createArgs[0];
     const title = createArgs[1];
-    if (!milestoneId || !title) { console.error('Usage: ticket create wave <milestone-id> "<title>"'); process.exit(1); }
+    if (!epicId || !title) { console.error('Usage: ticket create milestone <epic-id> "<title>"'); process.exit(1); }
 
-    // Find milestone directory
-    const mDirs = globSync(`${milestoneId}-*/`, { cwd: BACKLOG_DIR }).map(d => join(BACKLOG_DIR, d));
-    if (mDirs.length === 0) { console.error(`Milestone ${milestoneId} not found`); process.exit(1); }
-    const wavesDir = join(mDirs[0], 'waves');
+    const eDir = epicDir(epicId);
+    if (!eDir) { console.error(`Epic ${epicId} not found`); process.exit(1); }
+    const milestonesDir = join(eDir, 'milestones');
+    mkdirSync(milestonesDir, { recursive: true });
+
+    const num = nextNumber(milestonesDir, 'M');
+    const slug = slugify(title);
+    const milestoneId = `M${num}`;
+    const dir = join(milestonesDir, `${milestoneId}-${slug}`);
+    mkdirSync(join(dir, 'waves'), { recursive: true });
+
+    const fallback = `---\ntitle: ${title}\ncreated: ${new Date().toISOString().slice(0, 10)}\nstatus: empty\n---\n\n## Goal\n\n## Success criteria\n`;
+    const content = fillTemplate(readTemplate('milestone.md', fallback), title);
+    writeFileSync(join(dir, 'milestone.md'), content);
+    const compositeId = `${epicId}/${milestoneId}`;
+    gitCommit(dir, `[backlog] create ${compositeId}: ${title}`);
+    fullSync(db, BACKLOG_DIR);
+    console.log(`Created ${compositeId}: ${title}`);
+
+  } else if (type === 'wave') {
+    const parentId = createArgs[0];
+    const title = createArgs[1];
+    if (!parentId || !title) { console.error('Usage: ticket create wave <epic-id>/<milestone-id> "<title>"'); process.exit(1); }
+    const [epicId, milestoneId] = parentId.split('/');
+    if (!epicId || !milestoneId) { console.error('Wave parent must be in form <epic-id>/<milestone-id>'); process.exit(1); }
+
+    const mDir = milestoneDir(epicId, milestoneId);
+    if (!mDir) { console.error(`Milestone ${parentId} not found`); process.exit(1); }
+    const wavesDir = join(mDir, 'waves');
     mkdirSync(wavesDir, { recursive: true });
 
     const num = nextNumber(wavesDir, 'W');
     const slug = slugify(title);
     const waveId = `W${num}`;
-    const dirName = `${waveId}-${slug}`;
-    const dir = join(wavesDir, dirName);
+    const dir = join(wavesDir, `${waveId}-${slug}`);
     mkdirSync(join(dir, 'slices'), { recursive: true });
 
-    const template = existsSync(join(TEMPLATES_DIR, 'wave.md'))
-      ? readFileSync(join(TEMPLATES_DIR, 'wave.md'), 'utf-8')
-      : `---\ntitle: ${title}\ncreated: ${new Date().toISOString().slice(0, 10)}\n---\n\n## Context\n\n## Scope overview\n\n## Slices summary\n`;
-
-    const content = template.replace(/^title:.*$/m, `title: ${title}`).replace(/^created:.*$/m, `created: ${new Date().toISOString().slice(0, 10)}`);
+    const fallback = `---\ntitle: ${title}\ncreated: ${new Date().toISOString().slice(0, 10)}\nstatus: empty\n---\n\n## Context\n\n## Scope overview\n\n## Slices summary\n`;
+    const content = fillTemplate(readTemplate('wave.md', fallback), title);
     writeFileSync(join(dir, 'wave.md'), content);
-    const compositeId = `${milestoneId}/${waveId}`;
-    execSync(`git add "${dir}" && git commit -m "[backlog] create ${compositeId}: ${title}"`, { cwd: PROJECT_ROOT });
+    const compositeId = `${epicId}/${milestoneId}/${waveId}`;
+    gitCommit(dir, `[backlog] create ${compositeId}: ${title}`);
     fullSync(db, BACKLOG_DIR);
     console.log(`Created ${compositeId}: ${title}`);
 
   } else if (type === 'slice') {
-    const waveId = createArgs[0];
+    const parentId = createArgs[0];
     const title = createArgs[1];
-    if (!waveId || !title) { console.error('Usage: ticket create slice <wave-id> "<title>"'); process.exit(1); }
+    if (!parentId || !title) { console.error('Usage: ticket create slice <epic-id>/<milestone-id>/<wave-id> "<title>"'); process.exit(1); }
+    const [epicId, milestoneId, waveId] = parentId.split('/');
+    if (!epicId || !milestoneId || !waveId) { console.error('Slice parent must be in form <epic-id>/<milestone-id>/<wave-id>'); process.exit(1); }
 
-    const [mPrefix, wPrefix] = waveId.split('/');
-    const wDirs = globSync(`${mPrefix}-*/waves/${wPrefix}-*/`, { cwd: BACKLOG_DIR }).map(d => join(BACKLOG_DIR, d));
-    if (wDirs.length === 0) { console.error(`Wave ${waveId} not found`); process.exit(1); }
-    const slicesDir = join(wDirs[0], 'slices');
+    const wDir = waveDir(epicId, milestoneId, waveId);
+    if (!wDir) { console.error(`Wave ${parentId} not found`); process.exit(1); }
+    const slicesDir = join(wDir, 'slices');
     mkdirSync(slicesDir, { recursive: true });
 
     const num = nextNumber(slicesDir, 'S');
@@ -258,21 +329,16 @@ function cmdCreate(type: string, createArgs: string[]) {
     const sliceId = `S${num}`;
     const fileName = `${sliceId}-${slug}.md`;
 
-    const template = existsSync(join(TEMPLATES_DIR, 'slice.md'))
-      ? readFileSync(join(TEMPLATES_DIR, 'slice.md'), 'utf-8')
-      : `---\ntitle: ${title}\n---\n\n## Context\n\n## Scope\n\n## Requirements\n\n## Test expectations\n\n## Acceptance criteria\n`;
-
-    const content = template
-      .replace(/^title:.*$/m, `title: ${title}`)
-      .replace(/^created:.*$/m, `created: ${new Date().toISOString().slice(0, 10)}`);
+    const fallback = `---\ntitle: ${title}\ncreated: ${new Date().toISOString().slice(0, 10)}\nstatus: empty\n---\n\n## Context\n\n## Assumptions\n\n## Scope\n\n## Requirements\n\n## Test expectations\n\n## Acceptance criteria\n`;
+    const content = fillTemplate(readTemplate('slice.md', fallback), title);
     writeFileSync(join(slicesDir, fileName), content);
-    const compositeId = `${waveId}/${sliceId}`;
-    execSync(`git add "${join(slicesDir, fileName)}" && git commit -m "[backlog] create ${compositeId}: ${title}"`, { cwd: PROJECT_ROOT });
+    const compositeId = `${epicId}/${milestoneId}/${waveId}/${sliceId}`;
+    gitCommit(join(slicesDir, fileName), `[backlog] create ${compositeId}: ${title}`);
     fullSync(db, BACKLOG_DIR);
     console.log(`Created ${compositeId}: ${title}`);
 
   } else {
-    console.error(`Unknown type: ${type}. Use: milestone, wave, slice`);
+    console.error(`Unknown type: ${type}. Use: epic, milestone, wave, slice`);
     process.exit(1);
   }
 }
@@ -284,36 +350,47 @@ function cmdChecklist(id: string, promote: boolean) {
 
   const parts = id.split('/');
   let filePath: string;
-  let type: 'milestone' | 'wave' | 'slice';
+  let type: 'epic' | 'milestone' | 'wave' | 'slice';
   let result: { ok: boolean; checks: { name: string; passed: boolean }[] };
 
   if (parts.length === 1) {
-    type = 'milestone';
-    const dirs = globSync(`${parts[0]}-*/`, { cwd: BACKLOG_DIR });
-    if (dirs.length === 0) { console.error(`Milestone ${id} not found`); process.exit(1); }
-    filePath = join(BACKLOG_DIR, dirs[0], 'milestone.md');
+    type = 'epic';
+    const eDir = epicDir(parts[0]);
+    if (!eDir) { console.error(`Epic ${id} not found`); process.exit(1); }
+    filePath = join(eDir, 'epic.md');
     const content = readFileSync(filePath, 'utf-8');
-    result = checkMilestone(content);
-    const waveDirs = globSync('waves/W*-*/', { cwd: join(BACKLOG_DIR, dirs[0]) });
-    result.checks.push({ name: 'At least 1 child wave exists', passed: waveDirs.length > 0 });
+    result = checkEpic(content);
+    const milestoneDirs = globSync('milestones/M*-*/', { cwd: eDir });
+    result.checks.push({ name: 'At least 1 child milestone exists', passed: milestoneDirs.length > 0 });
     result.ok = result.checks.every((c) => c.passed);
 
   } else if (parts.length === 2) {
-    type = 'wave';
-    const dirs = globSync(`${parts[0]}-*/waves/${parts[1]}-*/`, { cwd: BACKLOG_DIR });
-    if (dirs.length === 0) { console.error(`Wave ${id} not found`); process.exit(1); }
-    filePath = join(BACKLOG_DIR, dirs[0], 'wave.md');
+    type = 'milestone';
+    const mDir = milestoneDir(parts[0], parts[1]);
+    if (!mDir) { console.error(`Milestone ${id} not found`); process.exit(1); }
+    filePath = join(mDir, 'milestone.md');
     const content = readFileSync(filePath, 'utf-8');
-    result = checkWave(content);
-    const sliceFiles = globSync('slices/S*-*.md', { cwd: join(BACKLOG_DIR, dirs[0]) });
-    result.checks.push({ name: 'At least 1 child slice exists', passed: sliceFiles.length > 0 });
+    result = checkMilestone(content);
+    const waveDirs = globSync('waves/W*-*/', { cwd: mDir });
+    result.checks.push({ name: 'At least 1 child wave exists', passed: waveDirs.length > 0 });
     result.ok = result.checks.every((c) => c.passed);
 
   } else if (parts.length === 3) {
+    type = 'wave';
+    const wDir = waveDir(parts[0], parts[1], parts[2]);
+    if (!wDir) { console.error(`Wave ${id} not found`); process.exit(1); }
+    filePath = join(wDir, 'wave.md');
+    const content = readFileSync(filePath, 'utf-8');
+    result = checkWave(content);
+    const sliceFiles = globSync('slices/S*-*.md', { cwd: wDir });
+    result.checks.push({ name: 'At least 1 child slice exists', passed: sliceFiles.length > 0 });
+    result.ok = result.checks.every((c) => c.passed);
+
+  } else if (parts.length === 4) {
     type = 'slice';
-    const files = globSync(`${parts[0]}-*/waves/${parts[1]}-*/slices/${parts[2]}-*.md`, { cwd: BACKLOG_DIR });
-    if (files.length === 0) { console.error(`Slice ${id} not found`); process.exit(1); }
-    filePath = join(BACKLOG_DIR, files[0]);
+    const sFile = sliceFile(parts[0], parts[1], parts[2], parts[3]);
+    if (!sFile) { console.error(`Slice ${id} not found`); process.exit(1); }
+    filePath = sFile;
     const content = readFileSync(filePath, 'utf-8');
     result = checkSlice(content);
 
@@ -324,21 +401,22 @@ function cmdChecklist(id: string, promote: boolean) {
   const label = type.charAt(0).toUpperCase() + type.slice(1);
   console.log(`\n${label}: ${id}\n`);
   for (const check of result.checks) {
-    const icon = check.passed ? '\u2713' : '\u2717';
+    const icon = check.passed ? '✓' : '✗';
     console.log(`  ${icon}  ${check.name}`);
   }
 
   const failCount = result.checks.filter((c) => !c.passed).length;
 
   if (result.ok && promote) {
-    const statusValue = type === 'milestone' ? 'milestone_defined'
+    const statusValue = type === 'epic' ? 'epic_defined'
+      : type === 'milestone' ? 'milestone_defined'
       : type === 'wave' ? 'wave_defined'
       : 'slice_defined';
     const parsed = matter(readFileSync(filePath, 'utf-8'));
     parsed.data.status = statusValue;
     writeFileSync(filePath, matter.stringify(parsed.content, parsed.data));
     fullSync(db, BACKLOG_DIR);
-    console.log(`\nResult: PASS \u2014 status updated to ${statusValue}`);
+    console.log(`\nResult: PASS — status updated to ${statusValue}`);
   } else if (result.ok) {
     console.log(`\nResult: PASS (${result.checks.length} checks)`);
   } else {
@@ -364,6 +442,7 @@ function cmdValidate() {
   let fixed = 0;
   const fixedFiles: string[] = [];
 
+  const epicFm = z.object({ title: z.string(), created: z.string(), status: z.string().optional() });
   const milestoneFm = z.object({ title: z.string(), created: z.string(), status: z.string().optional() });
   const waveFm = z.object({ title: z.string(), created: z.string(), status: z.string().optional() });
   const sliceFm = z.object({ title: z.string(), created: z.string().optional(), status: z.string().optional() });
@@ -376,10 +455,10 @@ function cmdValidate() {
     const content = readFileSync(file, 'utf-8');
     const { data } = matter(content);
 
-    const schemaMap = { milestone: milestoneFm, wave: waveFm, slice: sliceFm };
+    const schemaMap = { epic: epicFm, milestone: milestoneFm, wave: waveFm, slice: sliceFm };
     const result = schemaMap[type].safeParse(data);
     if (!result.success) {
-      console.error(`\u274c ${relPath}: ${result.error.issues.map(i => i.message).join(', ')}`);
+      console.error(`❌ ${relPath}: ${result.error.issues.map(i => i.message).join(', ')}`);
       errors++;
       continue;
     }
@@ -410,7 +489,7 @@ function cmdValidate() {
         writeFileSync(file, matter.stringify(parsed.content, parsed.data));
         fixedFiles.push(file);
         fixed++;
-        console.log(`\u2713 ${relPath}: fixed`);
+        console.log(`✓ ${relPath}: fixed`);
       }
     }
   }
@@ -425,7 +504,7 @@ function cmdValidate() {
   }
 
   if (errors === 0 && !fix) {
-    console.log('\u2713 All files valid');
+    console.log('✓ All files valid');
   } else if (errors > 0) {
     console.error(`\n${errors} file(s) with errors`);
     process.exit(1);

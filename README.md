@@ -1,10 +1,10 @@
 # specflow
 
 > **A microframework for spec-driven development.**
-> Formalize a business goal once, decompose it into reviewable units of work, and let humans or agents execute it under a strict TDD contract — without ever drifting from the spec.
+> Formalize a strategic theme once, decompose it into reviewable units of work, and let humans or agents execute it under a strict TDD contract — without ever drifting from the spec.
 
-**Version:** `v0.1`
-**Status:** initial isolation from the `hhru` project — describes the shape of the framework as it exists in that reference implementation.
+**Version:** `v0.2`
+**Status:** Epic layer added on top of v0.1's three-layer model. Grammar is now Epic → Milestone → Wave → Slice. Reference implementation in this repo, slash commands wired up, CI in place.
 
 ---
 
@@ -25,25 +25,30 @@ The result is a unit of work that:
 
 ---
 
-## The three-layer model
+## The four-layer model
 
 ```mermaid
 flowchart TD
-    M["🎯 Milestone — strategic goal\nGoal · Success criteria"]
+    E["🗺 Epic — strategic initiative\nGoal · Success criteria"]
+    M["🎯 Milestone — release-aligned deliverable\nGoal · Success criteria"]
     W["🌊 Wave — coherent slab of work\nContext · Scope overview · Slices summary\n(unit of branch + PR)"]
     S["🔪 Slice — atomic TDD step\nContext · Assumptions · Scope · Requirements ·\nTest expectations · Acceptance criteria\n(unit of commit)"]
 
+    E -->|1..N| M
     M -->|1..N| W
     W -->|1..N, strictly sequential| S
 ```
 
 Each layer has a **dedicated grammar** (mandatory sections, frontmatter shape, ID format) and a **dedicated role**:
 
-| Layer       | Answers   | Granularity       | Maps to     |
-| ----------- | --------- | ----------------- | ----------- |
-| Milestone   | **Why**   | Quarters / themes | Project arc |
-| Wave        | **What**  | Days / weeks      | Branch + PR |
-| Slice       | **How**   | Hours / one TDD cycle | Commit  |
+| Layer       | Answers       | Granularity            | Maps to              |
+| ----------- | ------------- | ---------------------- | -------------------- |
+| Epic        | **Why long-term** | Multi-quarter themes  | Roadmap initiative   |
+| Milestone   | **Why now**   | Quarter / release      | Versioned deliverable|
+| Wave        | **What**      | Days / weeks           | Branch + PR          |
+| Slice       | **How**       | Hours / one TDD cycle  | Commit               |
+
+> 🎬 **Slash commands** for creating any layer are documented in [SKILLS.md](SKILLS.md).
 
 ---
 
@@ -53,10 +58,10 @@ Each layer has a **dedicated grammar** (mandatory sections, frontmatter shape, I
 flowchart LR
     subgraph FS["📁 Filesystem (source of truth)"]
         T["templates/*.md"]
-        BL["backlog/M…/W…/S….md"]
+        BL["backlog/E…/M…/W…/S….md"]
     end
     subgraph DB["🗄 SQLite projection (backlog.sqlite)"]
-        DEF["milestones · waves · slices\n(rebuilt from MD)"]
+        DEF["epics · milestones · waves · slices\n(rebuilt from MD)"]
         STATE["wave_state · slice_state\n(mutable, CLI-only)"]
     end
     subgraph CLI["⚙️ ticket CLI"]
@@ -76,21 +81,23 @@ flowchart LR
 
 **Rule of thumb:**
 
-- 📝 Content lives in **Markdown files** under git. The DB is a projection — `rm backlog.sqlite` followed by `ticket sync` reproduces it.
+- 📝 Content lives in **Markdown files** under git. The DB is a projection — `rm backlog.sqlite` followed by `ticket sync` reproduces the definitions.
 - ⚙️ Runtime state lives in **SQLite**, mutable only through the CLI. Status changes are never committed to git.
 
 ---
 
 ## Reading order
 
-| # | File                                          | Read it when…                                                    |
-| - | --------------------------------------------- | ---------------------------------------------------------------- |
-| 1 | [docs/overview.md](docs/overview.md)          | You want the mental model in 5 minutes.                          |
-| 2 | [docs/document-model.md](docs/document-model.md) | You're writing or auditing a milestone / wave / slice.        |
-| 3 | [docs/lifecycle.md](docs/lifecycle.md)        | You want to understand the two-axis state machine.               |
-| 4 | [docs/cli.md](docs/cli.md)                    | You're using or extending the `ticket` CLI.                      |
-| 5 | [docs/agent-protocol.md](docs/agent-protocol.md) | You're an agent (or instructing one) about to pick up a wave. |
-| 6 | [docs/extensibility.md](docs/extensibility.md) | You want to add a new section, status, or command.              |
+| # | File                                                      | Read it when…                                                                |
+| - | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 1 | [docs/overview.md](docs/overview.md)                      | You want the mental model in 5 minutes.                                       |
+| 2 | [docs/document-model.md](docs/document-model.md)          | You're writing or auditing an epic / milestone / wave / slice.                |
+| 3 | [docs/lifecycle.md](docs/lifecycle.md)                    | You want to understand the two-axis state machine.                            |
+| 4 | [docs/cli.md](docs/cli.md)                                | You're using or extending the `ticket` CLI.                                   |
+| 5 | [docs/agent-protocol.md](docs/agent-protocol.md)          | You're an agent (or instructing one) about to pick up a wave.                 |
+| 6 | [docs/extensibility.md](docs/extensibility.md)            | You want to add a new section, status, or command.                            |
+| 7 | [SKILLS.md](SKILLS.md)                                    | You want to use the slash commands `/create-epic`, `/create-milestone`, etc.  |
+| 8 | [docs/proposals/cli-vcs-decoupling.md](docs/proposals/cli-vcs-decoupling.md) | Curious about post-v0.2 design directions.                            |
 
 ---
 
@@ -101,7 +108,9 @@ The reference implementation ships in this repo:
 - **CLI:** [`scripts/ticket.ts`](scripts/ticket.ts) — TypeScript, run via `tsx`.
 - **Backend:** [`src/backlog/`](src/backlog/) — `parser.ts`, `checklist.ts`, `state.ts`, `sync.ts`, `db.ts`, `schema.ts`, `watcher.ts`.
 - **Tests:** [`src/backlog/__tests__/`](src/backlog/__tests__/) — unit tests for parser, checklist, state machine, and sync.
-- **Stack:** Node.js ≥ 20 · TypeScript · `gray-matter` · `zod` · Drizzle ORM · `better-sqlite3` · `chokidar`.
+- **Slash commands:** [`.claude/commands/`](.claude/commands/) — `create-epic`, `create-milestone`, `create-wave`, `create-slice`.
+- **CI:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — typecheck + unit tests on Node 22 and 24.
+- **Stack:** Node.js ≥ 22 · TypeScript · `gray-matter` · `zod` · Drizzle ORM · `better-sqlite3` · `chokidar`.
 
 To run it:
 
@@ -112,11 +121,15 @@ npm run typecheck            # tsc --noEmit
 npm run ticket list          # exercise the CLI
 ```
 
-Portability to other stacks (Python, Go) is **not a goal of `v0.1`**. The grammar of the documents is portable; the CLI and DB layout are TypeScript+SQLite-specific. Sections of the spec that depend on this stack are marked **(reference impl.)**.
+Portability to other stacks (Python, Go) is **not a goal of v0.2**. The grammar of the documents is portable; the CLI and DB layout are TypeScript+SQLite-specific. Sections of the spec that depend on this stack are marked **(reference impl.)**.
 
 ## Sample backlog
 
-A frozen snapshot of one milestone (`M002 — Runtime deployment hardening` from `hhru`) lives in [`examples/sample-backlog/`](examples/sample-backlog/) as a worked example of milestone / wave / slice grammar. It is **not** under `backlog/` — see [examples/sample-backlog/README.md](examples/sample-backlog/README.md) for why.
+A frozen snapshot of one epic (`E001 Runtime hardening / M001 Runtime deployment hardening` from `hhru`) lives in [`examples/sample-backlog/`](examples/sample-backlog/) as a worked example of epic / milestone / wave / slice grammar. It is **not** under `backlog/` — see [examples/sample-backlog/README.md](examples/sample-backlog/README.md) for why.
+
+## Live backlog (specflow on itself)
+
+The repo's own `backlog/` contains [`E001-foundation-hardening`](backlog/E001-foundation-hardening/) — the actual ongoing work to harden specflow itself. specflow is dogfooded against its own framework.
 
 ---
 
@@ -124,10 +137,14 @@ A frozen snapshot of one milestone (`M002 — Runtime deployment hardening` from
 
 - ❌ A replacement for issue trackers in human-only teams that don't need machine-readable scope.
 - ❌ A general-purpose project management tool — it has no notion of estimates, sprints, velocity, or assignees beyond the active claim.
-- ❌ Stack-agnostic in `v0.1`. The reference implementation is TypeScript + SQLite; the *grammar* of the documents is portable, but the CLI/DB are not.
+- ❌ Stack-agnostic in `v0.2`. The reference implementation is TypeScript + SQLite; the *grammar* of the documents is portable, but the CLI/DB are not.
 
 ---
 
-## License & status
+## Versioning
 
-Extracted from `hhru` at version `v0.1`. Schema is stable for what's described here; new sections (e.g. `milestone_criteria` cross-refs in wave frontmatter) are observed in the wild but not yet formalized — see [docs/extensibility.md](docs/extensibility.md#observed-divergences).
+| Version  | What landed                                                                                              |
+| -------- | -------------------------------------------------------------------------------------------------------- |
+| `v0.1`   | Initial extraction from `hhru`. Three-layer model: Milestone → Wave → Slice.                              |
+| `v0.2`   | **Breaking.** Epic layer added on top. Slash commands. CI. Live backlog. Migration: wrap M001 dirs in E001.|
+| `v0.3`   | Planned: CLI/git decoupling — see [proposal](docs/proposals/cli-vcs-decoupling.md).                      |

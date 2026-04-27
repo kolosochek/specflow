@@ -19,12 +19,68 @@ All three types share these rules:
 
 ---
 
-## Layer 1 — Milestone
+## Layer 1 — Epic
 
 ### File location
 
 ```
-backlog/M\d{3}-<slug>/milestone.md
+backlog/E\d{3}-<slug>/epic.md
+```
+
+### Template
+
+```markdown
+---
+title: Epic title
+created: 2026-01-01
+status: empty
+---
+
+## Goal
+
+## Success criteria
+```
+
+### Frontmatter
+
+| Field      | Type             | Required | Allowed values                       |
+| ---------- | ---------------- | -------- | ------------------------------------ |
+| `title`    | string           | yes      | any non-default                      |
+| `created`  | date             | yes      | `YYYY-MM-DD` or ISO 8601             |
+| `status`   | enum             | no       | `empty` (default) · `epic_defined`   |
+
+### Sections
+
+| Heading              | Required | Min content                    |
+| -------------------- | -------- | ------------------------------ |
+| `## Goal`            | yes      | non-empty prose                |
+| `## Success criteria`| yes      | ≥ 2 top-level bullet items     |
+
+### Checklist (`checkEpic`)
+
+The CLI runs **5 mechanical checks** before accepting an epic as `epic_defined`:
+
+1. ✅ `title` is not the template default (`Epic title`).
+2. ✅ `created` parses as a valid calendar date.
+3. ✅ `## Goal` exists and has non-empty content.
+4. ✅ `## Success criteria` exists.
+5. ✅ Success criteria contain ≥ 2 bullets.
+
+> Plus a structural check applied at promotion time: at least one child milestone must exist.
+
+### Conventions observed in practice
+
+- The `## Goal` is a strategic narrative spanning multiple paragraphs — it explains the *why long-term*, framing milestones as steps along that arc.
+- `## Success criteria` items are **multi-quarter outcomes** ("multi-platform job search is feasible", "the system has zero hard-coded platform checks"), not deliverables.
+
+---
+
+## Layer 2 — Milestone
+
+### File location
+
+```
+backlog/E\d{3}-<e-slug>/milestones/M\d{3}-<m-slug>/milestone.md
 ```
 
 ### Template
@@ -76,12 +132,12 @@ The CLI runs **5 mechanical checks** before accepting a milestone as `milestone_
 
 ---
 
-## Layer 2 — Wave
+## Layer 3 — Wave
 
 ### File location
 
 ```
-backlog/M\d{3}-<m-slug>/waves/W\d{3}-<w-slug>/wave.md
+backlog/E\d{3}-<e-slug>/milestones/M\d{3}-<m-slug>/waves/W\d{3}-<w-slug>/wave.md
 ```
 
 ### Template
@@ -139,12 +195,12 @@ These appear in real waves and are useful, but the checklist does not enforce th
 
 ---
 
-## Layer 3 — Slice
+## Layer 4 — Slice
 
 ### File location
 
 ```
-backlog/M\d{3}-<m-slug>/waves/W\d{3}-<w-slug>/slices/S\d{3}-<s-slug>.md
+backlog/E\d{3}-<e-slug>/milestones/M\d{3}-<m-slug>/waves/W\d{3}-<w-slug>/slices/S\d{3}-<s-slug>.md
 ```
 
 ### Template

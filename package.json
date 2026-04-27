@@ -1,7 +1,7 @@
 {
   "name": "specflow",
-  "version": "0.1.0",
-  "description": "A microframework for spec-driven development. Milestone → Wave → Slice with strict TDD execution.",
+  "version": "0.2.0",
+  "description": "A microframework for spec-driven development. Epic → Milestone → Wave → Slice with strict TDD execution.",
   "type": "module",
   "license": "UNLICENSED",
   "engines": {

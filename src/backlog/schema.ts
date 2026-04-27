@@ -2,8 +2,19 @@ import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 // --- Definition tables (rebuilt from MD files, read-only) ---
 
+export const epics = sqliteTable('epics', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  path: text('path').notNull(),
+  created: text('created').notNull(),
+  status: text('status').notNull().default('empty'),
+});
+
 export const milestones = sqliteTable('milestones', {
   id: text('id').primaryKey(),
+  epicId: text('epic_id')
+    .notNull()
+    .references(() => epics.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   path: text('path').notNull(),
   created: text('created').notNull(),

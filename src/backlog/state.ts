@@ -191,6 +191,30 @@ export function deriveMilestoneStatus(
   return 'active';
 }
 
+/**
+ * Derive an epic's runtime status from the union of its child milestones.
+ * Mirrors deriveMilestoneStatus — all draft → draft, all done → done, else active.
+ * Epics, like milestones, have no own runtime state row.
+ */
+export function deriveEpicStatus(
+  db: BacklogDb,
+  epicId: string,
+): 'draft' | 'active' | 'done' {
+  const milestones = db
+    .select({ id: schema.milestones.id })
+    .from(schema.milestones)
+    .where(eq(schema.milestones.epicId, epicId))
+    .all();
+
+  if (milestones.length === 0) return 'draft';
+
+  const milestoneStatuses = milestones.map((m) => deriveMilestoneStatus(db, m.id));
+
+  if (milestoneStatuses.every((s) => s === 'draft')) return 'draft';
+  if (milestoneStatuses.every((s) => s === 'done')) return 'done';
+  return 'active';
+}
+
 export function getWaveDetail(db: BacklogDb, waveId: string) {
   const wave = db.select().from(schema.waves).where(eq(schema.waves.id, waveId)).get();
 

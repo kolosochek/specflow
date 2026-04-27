@@ -44,12 +44,13 @@ flowchart LR
 
 ### The values
 
-| Value                      | Meaning                                                          | Set by                              |
-| -------------------------- | ---------------------------------------------------------------- | ----------------------------------- |
-| `empty`                    | The document exists but has not been validated as ready          | `ticket create …` (initial state)   |
-| `milestone_defined`        | The milestone passes its checklist                               | `ticket checklist <M> --promote`    |
-| `wave_defined`             | The wave passes its checklist                                    | `ticket checklist <M>/<W> --promote`|
-| `slice_defined`            | The slice passes its checklist                                   | `ticket checklist <M>/<W>/<S> --promote` |
+| Value                      | Meaning                                                          | Set by                                            |
+| -------------------------- | ---------------------------------------------------------------- | ------------------------------------------------- |
+| `empty`                    | The document exists but has not been validated as ready          | `ticket create …` (initial state)                 |
+| `epic_defined`             | The epic passes its checklist                                    | `ticket checklist <E> --promote`                  |
+| `milestone_defined`        | The milestone passes its checklist                               | `ticket checklist <E>/<M> --promote`              |
+| `wave_defined`             | The wave passes its checklist                                    | `ticket checklist <E>/<M>/<W> --promote`          |
+| `slice_defined`            | The slice passes its checklist                                   | `ticket checklist <E>/<M>/<W>/<S> --promote`      |
 
 ### How readiness flips
 
@@ -190,9 +191,11 @@ It does **not** touch content readiness. The MD files are unchanged, the wave is
 
 ---
 
-## Derived state — milestone status
+## Derived state — milestone & epic status
 
-Milestones do **not** have their own runtime status. The CLI computes it on the fly from the union of wave states (`deriveMilestoneStatus`):
+Milestones and epics do **not** have their own runtime status rows. The CLI computes them on the fly.
+
+### Milestone (`deriveMilestoneStatus`)
 
 | If…                                       | Milestone status is |
 | ----------------------------------------- | ------------------- |
@@ -201,56 +204,74 @@ Milestones do **not** have their own runtime status. The CLI computes it on the 
 | All waves are `done`                      | `done`              |
 | Otherwise (mixed)                         | `active`            |
 
-> 💡 **Implication.** A milestone is "in progress" the moment any wave leaves `draft`. There's no separate "started" or "kicked off" event — work begins by claiming the first wave.
+### Epic (`deriveEpicStatus`)
+
+Mirrors the milestone rule one level up — over the union of child milestone statuses:
+
+| If…                                          | Epic status is |
+| -------------------------------------------- | -------------- |
+| Epic has no milestones                       | `draft`        |
+| All milestones are `draft`                   | `draft`        |
+| All milestones are `done`                    | `done`         |
+| Otherwise (mixed)                            | `active`       |
+
+> 💡 **Implication.** An epic is "in progress" the moment any milestone has any non-draft wave. There's no separate "kickoff" event — work begins by claiming the first wave anywhere in the tree.
 
 ---
 
 ## A worked example
 
-A new milestone takes this path:
+A new epic takes this path:
 
 ```
-1. ticket create milestone "Stabilization"
-   → backlog/M003-stabilization/milestone.md             (status: empty, wave_state: —)
+1. ticket create epic "Stabilization"
+   → backlog/E001-stabilization/epic.md                              (status: empty)
 
 2. <author goal + success criteria>
-   ticket checklist M003 --promote
+   ticket checklist E001 --promote
+   → epic.md frontmatter: status = epic_defined
+
+3. ticket create milestone E001 "Pipeline atomicity"
+   → backlog/E001-…/milestones/M001-…/milestone.md                  (status: empty)
+
+4. <author goal + success criteria>
+   ticket checklist E001/M001 --promote
    → milestone.md frontmatter: status = milestone_defined
 
-3. ticket create wave M003 "Pipeline atomicity"
-   → backlog/M003-…/waves/W002-…/wave.md                (status: empty)
+5. ticket create wave E001/M001 "Atomic score"
+   → backlog/…/waves/W001-…/wave.md                                 (status: empty)
 
-4. <author Context, Scope overview, Slices summary>
-   ticket create slice M003/W002 "Atomic score"
+6. <author Context, Scope overview, Slices summary>
+   ticket create slice E001/M001/W001 "Add cascade helper"
    <… more slices …>
-   → S001-…, S002-…, S003-…                             (each status: empty)
+   → S001-…, S002-…, S003-…                                          (each status: empty)
 
-5. <author each slice's body, then for each:>
-   ticket checklist M003/W002/S00X --promote
+7. <author each slice's body, then for each:>
+   ticket checklist E001/M001/W001/S00X --promote
    → status = slice_defined
 
-6. ticket checklist M003/W002 --promote
+8. ticket checklist E001/M001/W001 --promote
    → wave.md status = wave_defined
 
-7. ticket promote M003/W002
-   → wave_state.status = ready_to_dev                   (gate 1 passes)
+9. ticket promote E001/M001/W001
+   → wave_state.status = ready_to_dev                                (gate 1 passes)
 
-8. ticket claim M003/W002 agent-alice
-   → wave_state.status = claimed, assignedTo = agent-alice
+10. ticket claim E001/M001/W001 agent-alice
+    → wave_state.status = claimed, assignedTo = agent-alice
 
-9. ticket status M003/W002 in_progress
-   → wave_state.status = in_progress
+11. ticket status E001/M001/W001 in_progress
+    → wave_state.status = in_progress
 
-10. <agent runs slice loop for S001 → S002 → S003>
-    ticket slice-done M003/W002/S001
-    ticket slice-done M003/W002/S002
-    ticket slice-done M003/W002/S003
+12. <agent runs slice loop for S001 → S002 → S003>
+    ticket slice-done E001/M001/W001/S001
+    ticket slice-done E001/M001/W001/S002
+    ticket slice-done E001/M001/W001/S003
 
-11. ticket done M003/W002 --branch agent/M003-W002 --pr <url>
-    → wave_state.status = done, branch + pr recorded   (gate 2 passes)
+13. ticket done E001/M001/W001 --branch agent/E001-M001-W001 --pr <url>
+    → wave_state.status = done, branch + pr recorded                 (gate 2 passes)
 
-12. The milestone's derived status flips to 'active' or 'done' depending on
-    whether other waves remain.
+14. The milestone's derived status flips to 'active' or 'done' depending on
+    whether other waves remain. The epic's derived status follows.
 ```
 
 The full audit trail of *what was decided* lives in git (the MD files). The audit trail of *what was executed* lives in `wave_state` and `slice_state` (the SQLite DB).

@@ -12,22 +12,25 @@ The `ticket` CLI is the **single legal mutator** of runtime state. Every command
 
 ## Command index
 
-| Command                                  | Kind     | What it does                                                                           |
-| ---------------------------------------- | -------- | -------------------------------------------------------------------------------------- |
-| `list [--status <s>]`                    | view     | Tree of milestones → waves → slices, with content + execution status.                  |
-| `show <wave-id>`                         | view     | Detail of one wave, including all its slices and their state.                          |
-| `create milestone "<title>"`             | author   | Scaffold a new `M00N` directory + `milestone.md` from the template.                    |
-| `create wave <M> "<title>"`              | author   | Scaffold a new `W00N` directory + `wave.md`.                                           |
-| `create slice <M/W> "<title>"`           | author   | Scaffold a new `S00N-<slug>.md` slice file.                                            |
-| `checklist <id> [--promote]`             | author   | Run the type-appropriate checks; with `--promote`, flip frontmatter status if all pass.|
-| `validate [--fix]`                       | author   | Schema-validate every MD file's frontmatter; optionally backfill missing fields.       |
-| `sync`                                   | state    | Rebuild the definition tables from the filesystem.                                     |
-| `promote <wave-id>`                      | state    | Move wave from `draft` → `ready_to_dev` (Gate 1).                                      |
-| `claim <wave-id> <agent-id>`             | state    | Move wave from `ready_to_dev` → `claimed`.                                             |
-| `status <wave-id> <new-status>`          | state    | Whitelisted transition; today only `claimed → in_progress`.                            |
-| `slice-done <slice-id>`                  | state    | Set slice's execution status to `done`.                                                |
-| `done <wave-id> --branch <b> --pr <url>` | state    | Move wave from `in_progress` → `done` (Gate 2). Persists branch + PR url.              |
-| `reset <wave-id>`                        | state    | Force wave + all slices back to `draft`. Clears assignment / branch / PR.              |
+| Command                                       | Kind     | What it does                                                                           |
+| --------------------------------------------- | -------- | -------------------------------------------------------------------------------------- |
+| `list [--status <s>]`                         | view     | Tree of epics → milestones → waves → slices, with content + execution status.          |
+| `show <wave-id>`                              | view     | Detail of one wave, including all its slices and their state.                          |
+| `create epic "<title>"`                       | author   | Scaffold a new `E00N` directory + `epic.md` from the template.                         |
+| `create milestone <E> "<title>"`              | author   | Scaffold a new `M00N` directory + `milestone.md` under epic `E`.                       |
+| `create wave <E>/<M> "<title>"`               | author   | Scaffold a new `W00N` directory + `wave.md` under milestone `E/M`.                     |
+| `create slice <E>/<M>/<W> "<title>"`          | author   | Scaffold a new `S00N-<slug>.md` slice file under wave `E/M/W`.                         |
+| `checklist <id> [--promote]`                  | author   | Run the type-appropriate checks; with `--promote`, flip frontmatter status if all pass.|
+| `validate [--fix]`                            | author   | Schema-validate every MD file's frontmatter; optionally backfill missing fields.       |
+| `sync`                                        | state    | Rebuild the definition tables from the filesystem.                                     |
+| `promote <wave-id>`                           | state    | Move wave from `draft` → `ready_to_dev` (Gate 1).                                      |
+| `claim <wave-id> <agent-id>`                  | state    | Move wave from `ready_to_dev` → `claimed`.                                             |
+| `status <wave-id> <new-status>`               | state    | Whitelisted transition; today only `claimed → in_progress`.                            |
+| `slice-done <slice-id>`                       | state    | Set slice's execution status to `done`.                                                |
+| `done <wave-id> --branch <b> --pr <url>`      | state    | Move wave from `in_progress` → `done` (Gate 2). Persists branch + PR url.              |
+| `reset <wave-id>`                             | state    | Force wave + all slices back to `draft`. Clears assignment / branch / PR.              |
+
+> 💡 **Slash commands.** [`SKILLS.md`](../SKILLS.md) wraps the four `create *` commands as `/create-epic`, `/create-milestone`, `/create-wave`, `/create-slice` for use in agent sessions.
 
 ---
 
@@ -199,12 +202,13 @@ This makes the CLI compose well in shell pipelines and CI checks.
 
 ## Where things live (file vs DB)
 
-| Datum                                  | File (git)                          | DB (`backlog.sqlite`)         |
-| -------------------------------------- | ----------------------------------- | ----------------------------- |
-| Document body (Context, Scope, …)      | ✅ MD files                         | ❌ (only path is stored)      |
-| `title`, `created`                     | ✅ frontmatter                      | ✅ definition tables          |
-| Content readiness `status`             | ✅ frontmatter                      | ✅ definition tables (mirror) |
-| Execution status (`draft`…`done`)      | ❌                                  | ✅ `wave_state.status` / `slice_state.status` |
-| Assignee, branch, PR url               | ❌                                  | ✅ `wave_state`               |
+| Datum                                  | File (git)                          | DB (`backlog.sqlite`)                     |
+| -------------------------------------- | ----------------------------------- | ----------------------------------------- |
+| Document body (Context, Scope, …)      | ✅ MD files                         | ❌ (only path is stored)                  |
+| `title`, `created`                     | ✅ frontmatter                      | ✅ definition tables                      |
+| Content readiness `status`             | ✅ frontmatter                      | ✅ definition tables (mirror)             |
+| Wave / slice execution status          | ❌                                  | ✅ `wave_state.status` / `slice_state.status` |
+| Epic / milestone execution status      | ❌                                  | **derived** from children at query time   |
+| Assignee, branch, PR url               | ❌                                  | ✅ `wave_state`                           |
 
 > 🔁 **Recovery rule.** If `backlog.sqlite` is lost, `ticket sync` rebuilds **everything except** runtime state. There is no automatic recovery for execution history — that's an explicit trade-off (see [extensibility.md → recovery model](extensibility.md#recovery-model)).

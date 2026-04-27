@@ -3,8 +3,8 @@ import { join } from 'path';
 import { eq, notInArray } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema.js';
-import { classifyFile, deriveIdFromPath, parseMilestone, parseWave, parseSlice } from './parser.js';
-import type { ParsedMilestone, ParsedWave, ParsedSlice } from './parser.js';
+import { classifyFile, deriveIdFromPath, parseEpic, parseMilestone, parseWave, parseSlice } from './parser.js';
+import type { ParsedEpic, ParsedMilestone, ParsedWave, ParsedSlice } from './parser.js';
 
 type BacklogDb = BetterSQLite3Database<typeof schema>;
 
@@ -16,6 +16,7 @@ function globMdFiles(backlogDir: string): string[] {
 export function fullSync(db: BacklogDb, backlogDir: string): void {
   const files = globMdFiles(backlogDir);
 
+  const epics: ParsedEpic[] = [];
   const milestones: ParsedMilestone[] = [];
   const waves: ParsedWave[] = [];
   const slices: ParsedSlice[] = [];
@@ -26,7 +27,10 @@ export function fullSync(db: BacklogDb, backlogDir: string): void {
     const type = classifyFile(relPath);
     if (!type) continue;
 
-    if (type === 'milestone') {
+    if (type === 'epic') {
+      const parsed = parseEpic(content, relPath);
+      if (parsed) epics.push(parsed);
+    } else if (type === 'milestone') {
       const parsed = parseMilestone(content, relPath);
       if (parsed) milestones.push(parsed);
     } else if (type === 'wave') {
@@ -40,13 +44,28 @@ export function fullSync(db: BacklogDb, backlogDir: string): void {
 
   const now = new Date().toISOString();
 
-  // Upsert definitions
+  // Upsert definitions in parent → child order (FKs)
+  for (const e of epics) {
+    db.insert(schema.epics)
+      .values(e)
+      .onConflictDoUpdate({
+        target: schema.epics.id,
+        set: { title: e.title, path: e.path, created: e.created, status: e.status },
+      })
+      .run();
+  }
   for (const m of milestones) {
     db.insert(schema.milestones)
       .values(m)
       .onConflictDoUpdate({
         target: schema.milestones.id,
-        set: { title: m.title, path: m.path, created: m.created, status: m.status },
+        set: {
+          epicId: m.epicId,
+          title: m.title,
+          path: m.path,
+          created: m.created,
+          status: m.status,
+        },
       })
       .run();
   }
@@ -81,7 +100,7 @@ export function fullSync(db: BacklogDb, backlogDir: string): void {
       .run();
   }
 
-  // Remove orphans — delete in reverse order (slices -> waves -> milestones)
+  // Remove orphans — delete in reverse order (slices -> waves -> milestones -> epics)
   // so foreign key constraints are satisfied
   const sliceIds = slices.map((s) => s.id);
   if (sliceIds.length > 0) {
@@ -102,6 +121,13 @@ export function fullSync(db: BacklogDb, backlogDir: string): void {
     db.delete(schema.milestones).where(notInArray(schema.milestones.id, milestoneIds)).run();
   } else {
     db.delete(schema.milestones).run();
+  }
+
+  const epicIds = epics.map((e) => e.id);
+  if (epicIds.length > 0) {
+    db.delete(schema.epics).where(notInArray(schema.epics.id, epicIds)).run();
+  } else {
+    db.delete(schema.epics).run();
   }
 
   // Insert default state rows for new definitions (skip if state already exists)
@@ -137,7 +163,22 @@ export function incrementalSyncFile(db: BacklogDb, backlogDir: string, absPath: 
   const content = readFileSync(absPath, 'utf-8');
   const now = new Date().toISOString();
 
-  if (type === 'milestone') {
+  if (type === 'epic') {
+    const parsed = parseEpic(content, relPath);
+    if (!parsed) return;
+    db.insert(schema.epics)
+      .values(parsed)
+      .onConflictDoUpdate({
+        target: schema.epics.id,
+        set: {
+          title: parsed.title,
+          path: parsed.path,
+          created: parsed.created,
+          status: parsed.status,
+        },
+      })
+      .run();
+  } else if (type === 'milestone') {
     const parsed = parseMilestone(content, relPath);
     if (!parsed) return;
     db.insert(schema.milestones)
@@ -145,6 +186,7 @@ export function incrementalSyncFile(db: BacklogDb, backlogDir: string, absPath: 
       .onConflictDoUpdate({
         target: schema.milestones.id,
         set: {
+          epicId: parsed.epicId,
           title: parsed.title,
           path: parsed.path,
           created: parsed.created,
@@ -215,7 +257,9 @@ export function incrementalDeleteFile(db: BacklogDb, backlogDir: string, absPath
   const id = deriveIdFromPath(relPath, type);
   if (!id) return;
 
-  if (type === 'milestone') {
+  if (type === 'epic') {
+    db.delete(schema.epics).where(eq(schema.epics.id, id)).run();
+  } else if (type === 'milestone') {
     db.delete(schema.milestones).where(eq(schema.milestones.id, id)).run();
   } else if (type === 'wave') {
     db.delete(schema.waves).where(eq(schema.waves.id, id)).run();
@@ -225,7 +269,8 @@ export function incrementalDeleteFile(db: BacklogDb, backlogDir: string, absPath
 }
 
 export function targetedSync(db: BacklogDb, backlogDir: string, waveId: string): void {
-  const [milestonePrefix] = waveId.split('/');
+  // waveId is composite "E001/M001/W001" — restrict scan to its epic prefix
+  const [epicPrefix] = waveId.split('/');
   const files = globMdFiles(backlogDir);
   const now = new Date().toISOString();
 
@@ -236,11 +281,26 @@ export function targetedSync(db: BacklogDb, backlogDir: string, waveId: string):
 
     const id = deriveIdFromPath(relPath, type);
     if (!id) continue;
-    if (!id.startsWith(milestonePrefix)) continue;
+    if (!id.startsWith(epicPrefix)) continue;
 
     const content = readFileSync(absPath, 'utf-8');
 
-    if (type === 'milestone') {
+    if (type === 'epic') {
+      const parsed = parseEpic(content, relPath);
+      if (!parsed) continue;
+      db.insert(schema.epics)
+        .values(parsed)
+        .onConflictDoUpdate({
+          target: schema.epics.id,
+          set: {
+            title: parsed.title,
+            path: parsed.path,
+            created: parsed.created,
+            status: parsed.status,
+          },
+        })
+        .run();
+    } else if (type === 'milestone') {
       const parsed = parseMilestone(content, relPath);
       if (!parsed) continue;
       db.insert(schema.milestones)
@@ -248,6 +308,7 @@ export function targetedSync(db: BacklogDb, backlogDir: string, waveId: string):
         .onConflictDoUpdate({
           target: schema.milestones.id,
           set: {
+            epicId: parsed.epicId,
             title: parsed.title,
             path: parsed.path,
             created: parsed.created,

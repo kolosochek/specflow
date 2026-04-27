@@ -25,24 +25,32 @@ function createTempBacklog() {
       close();
       rmSync(tempDir, { recursive: true, force: true });
     },
-    addMilestone(slug: string, title: string) {
+    addEpic(slug: string, title: string) {
       const dir = join(backlogDir, slug);
+      mkdirSync(join(dir, 'milestones'), { recursive: true });
+      writeFileSync(
+        join(dir, 'epic.md'),
+        `---\ntitle: ${title}\ncreated: 2026-04-10\n---\n\n## Goal\nGoal.\n`,
+      );
+    },
+    addMilestone(eSlug: string, mSlug: string, title: string) {
+      const dir = join(backlogDir, eSlug, 'milestones', mSlug);
       mkdirSync(join(dir, 'waves'), { recursive: true });
       writeFileSync(
         join(dir, 'milestone.md'),
         `---\ntitle: ${title}\ncreated: 2026-04-10\n---\n\n## Goal\nGoal.\n`,
       );
     },
-    addWave(mSlug: string, wSlug: string, title: string) {
-      const dir = join(backlogDir, mSlug, 'waves', wSlug);
+    addWave(eSlug: string, mSlug: string, wSlug: string, title: string) {
+      const dir = join(backlogDir, eSlug, 'milestones', mSlug, 'waves', wSlug);
       mkdirSync(join(dir, 'slices'), { recursive: true });
       writeFileSync(
         join(dir, 'wave.md'),
         `---\ntitle: ${title}\ncreated: 2026-04-10\n---\n\n## Context\nContext.\n`,
       );
     },
-    addSlice(mSlug: string, wSlug: string, sFile: string, title: string) {
-      const dir = join(backlogDir, mSlug, 'waves', wSlug, 'slices');
+    addSlice(eSlug: string, mSlug: string, wSlug: string, sFile: string, title: string) {
+      const dir = join(backlogDir, eSlug, 'milestones', mSlug, 'waves', wSlug, 'slices');
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, sFile), `---\ntitle: ${title}\n---\n\n## Context\nContext.\n`);
     },
@@ -50,26 +58,32 @@ function createTempBacklog() {
 }
 
 describe('fullSync', () => {
-  it('imports milestones, waves, and slices from files', () => {
-    // SCENARIO: backlog directory with one milestone, one wave, two slices
-    // INPUT: M001/W001 with S001 and S002
-    // EXPECTED: 1 milestone, 1 wave, 2 slices in DB; all state rows default to draft
+  it('imports epics, milestones, waves, and slices from files', () => {
+    // SCENARIO: backlog directory with one epic, one milestone, one wave, two slices
+    // INPUT: E001 → M001 → W001 with S001 and S002
+    // EXPECTED: 1 epic, 1 milestone, 1 wave, 2 slices in DB; all state rows default to draft
     const env = createTempBacklog();
     try {
-      env.addMilestone('M001-auth', 'Auth redesign');
-      env.addWave('M001-auth', 'W001-providers', 'Refactor providers');
-      env.addSlice('M001-auth', 'W001-providers', 'S001-extract.md', 'Extract interface');
-      env.addSlice('M001-auth', 'W001-providers', 'S002-implement.md', 'Implement provider');
+      env.addEpic('E001-foundation', 'Foundation');
+      env.addMilestone('E001-foundation', 'M001-auth', 'Auth redesign');
+      env.addWave('E001-foundation', 'M001-auth', 'W001-providers', 'Refactor providers');
+      env.addSlice('E001-foundation', 'M001-auth', 'W001-providers', 'S001-extract.md', 'Extract interface');
+      env.addSlice('E001-foundation', 'M001-auth', 'W001-providers', 'S002-implement.md', 'Implement provider');
 
       fullSync(env.db, env.backlogDir);
 
+      const epics = env.db.select().from(schema.epics).all();
+      expect(epics).toHaveLength(1);
+      expect(epics[0].id).toBe('E001');
+
       const milestones = env.db.select().from(schema.milestones).all();
       expect(milestones).toHaveLength(1);
-      expect(milestones[0].id).toBe('M001');
+      expect(milestones[0].id).toBe('E001/M001');
+      expect(milestones[0].epicId).toBe('E001');
 
       const waves = env.db.select().from(schema.waves).all();
       expect(waves).toHaveLength(1);
-      expect(waves[0].id).toBe('M001/W001');
+      expect(waves[0].id).toBe('E001/M001/W001');
 
       const slices = env.db.select().from(schema.slices).all();
       expect(slices).toHaveLength(2);
@@ -92,16 +106,17 @@ describe('fullSync', () => {
     // EXPECTED: state remains claimed after re-sync
     const env = createTempBacklog();
     try {
-      env.addMilestone('M001-auth', 'Auth redesign');
-      env.addWave('M001-auth', 'W001-providers', 'Refactor providers');
-      env.addSlice('M001-auth', 'W001-providers', 'S001-extract.md', 'Extract interface');
+      env.addEpic('E001-foundation', 'Foundation');
+      env.addMilestone('E001-foundation', 'M001-auth', 'Auth redesign');
+      env.addWave('E001-foundation', 'M001-auth', 'W001-providers', 'Refactor providers');
+      env.addSlice('E001-foundation', 'M001-auth', 'W001-providers', 'S001-extract.md', 'Extract interface');
 
       fullSync(env.db, env.backlogDir);
 
       env.db
         .update(schema.waveState)
         .set({ status: 'claimed', assignedTo: 'claude-code', updatedAt: new Date().toISOString() })
-        .where(eq(schema.waveState.waveId, 'M001/W001'))
+        .where(eq(schema.waveState.waveId, 'E001/M001/W001'))
         .run();
 
       fullSync(env.db, env.backlogDir);
@@ -120,15 +135,21 @@ describe('fullSync', () => {
     // EXPECTED: only 1 slice remains, orphaned state row removed
     const env = createTempBacklog();
     try {
-      env.addMilestone('M001-auth', 'Auth redesign');
-      env.addWave('M001-auth', 'W001-providers', 'Refactor');
-      env.addSlice('M001-auth', 'W001-providers', 'S001-extract.md', 'Extract');
-      env.addSlice('M001-auth', 'W001-providers', 'S002-implement.md', 'Implement');
+      env.addEpic('E001-foundation', 'Foundation');
+      env.addMilestone('E001-foundation', 'M001-auth', 'Auth redesign');
+      env.addWave('E001-foundation', 'M001-auth', 'W001-providers', 'Refactor');
+      env.addSlice('E001-foundation', 'M001-auth', 'W001-providers', 'S001-extract.md', 'Extract');
+      env.addSlice('E001-foundation', 'M001-auth', 'W001-providers', 'S002-implement.md', 'Implement');
 
       fullSync(env.db, env.backlogDir);
       expect(env.db.select().from(schema.slices).all()).toHaveLength(2);
 
-      unlinkSync(join(env.backlogDir, 'M001-auth/waves/W001-providers/slices/S002-implement.md'));
+      unlinkSync(
+        join(
+          env.backlogDir,
+          'E001-foundation/milestones/M001-auth/waves/W001-providers/slices/S002-implement.md',
+        ),
+      );
       fullSync(env.db, env.backlogDir);
 
       expect(env.db.select().from(schema.slices).all()).toHaveLength(1);
@@ -139,13 +160,19 @@ describe('fullSync', () => {
   });
 
   it('syncs status field from frontmatter to definition tables', () => {
-    // SCENARIO: milestone and slice have status in frontmatter
-    // INPUT: milestone with status: milestone_defined, slice with status: slice_defined
+    // SCENARIO: epic, milestone, wave, slice each have status in frontmatter
+    // INPUT: epic_defined, milestone_defined, wave_defined, slice_defined
     // EXPECTED: status values synced to SQLite definition tables
     const env = createTempBacklog();
     try {
-      const mDir = join(env.backlogDir, 'M001-auth');
+      const eDir = join(env.backlogDir, 'E001-foundation');
+      const mDir = join(eDir, 'milestones', 'M001-auth');
       mkdirSync(join(mDir, 'waves', 'W001-refactor', 'slices'), { recursive: true });
+
+      writeFileSync(
+        join(eDir, 'epic.md'),
+        `---\ntitle: Foundation\ncreated: 2026-04-10\nstatus: epic_defined\n---\n\n## Goal\nGoal.\n`,
+      );
       writeFileSync(
         join(mDir, 'milestone.md'),
         `---\ntitle: Auth\ncreated: 2026-04-10\nstatus: milestone_defined\n---\n\n## Goal\nGoal.\n`,
@@ -160,6 +187,9 @@ describe('fullSync', () => {
       );
 
       fullSync(env.db, env.backlogDir);
+
+      const epics = env.db.select().from(schema.epics).all();
+      expect(epics[0].status).toBe('epic_defined');
 
       const milestones = env.db.select().from(schema.milestones).all();
       expect(milestones[0].status).toBe('milestone_defined');
@@ -177,10 +207,14 @@ describe('fullSync', () => {
 
   it('excludes template files from sync', () => {
     // SCENARIO: template files exist in backlog/templates/
-    // INPUT: templates directory with milestone.md, wave.md, slice.md
+    // INPUT: templates directory with epic.md, milestone.md, wave.md, slice.md
     // EXPECTED: no definitions created for template files
     const env = createTempBacklog();
     try {
+      writeFileSync(
+        join(env.backlogDir, 'templates/epic.md'),
+        '---\ntitle: Template\ncreated: 2026-01-01\n---\n',
+      );
       writeFileSync(
         join(env.backlogDir, 'templates/milestone.md'),
         '---\ntitle: Template\ncreated: 2026-01-01\n---\n',
@@ -193,6 +227,7 @@ describe('fullSync', () => {
 
       fullSync(env.db, env.backlogDir);
 
+      expect(env.db.select().from(schema.epics).all()).toHaveLength(0);
       expect(env.db.select().from(schema.milestones).all()).toHaveLength(0);
     } finally {
       env.cleanup();

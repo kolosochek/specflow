@@ -73,6 +73,32 @@ function buildResult(checks: Check[]): CheckResult {
 }
 
 // ---------------------------------------------------------------------------
+// checkEpic
+// ---------------------------------------------------------------------------
+
+export function checkEpic(content: string): CheckResult {
+  const { data, content: body } = matter(content);
+
+  const titleOk = typeof data.title === 'string' && data.title !== 'Epic title';
+  const dateOk = isValidDate(data.created);
+
+  const goalText = sectionContent(body, 'Goal');
+  const goalHasContent = goalText !== null && goalText.length > 0;
+
+  const criteriaText = sectionContent(body, 'Success criteria');
+  const criteriaExists = criteriaText !== null;
+  const criteriaCount = criteriaText ? countBullets(criteriaText) : 0;
+
+  return buildResult([
+    { name: 'title is not template default', passed: titleOk },
+    { name: 'created is a valid date', passed: dateOk },
+    { name: '## Goal has content', passed: goalHasContent },
+    { name: '## Success criteria exists', passed: criteriaExists },
+    { name: 'Success criteria >= 2 items', passed: criteriaCount >= 2 },
+  ]);
+}
+
+// ---------------------------------------------------------------------------
 // checkMilestone
 // ---------------------------------------------------------------------------
 

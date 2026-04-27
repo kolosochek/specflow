@@ -8,8 +8,14 @@ const BACKLOG_DB_PATH = process.env.BACKLOG_DB_PATH || './backlog.sqlite';
 type BacklogDb = ReturnType<typeof drizzle<typeof schema>>;
 
 function ensureTables(db: BacklogDb): void {
-  db.run(sql`CREATE TABLE IF NOT EXISTS milestones (
+  db.run(sql`CREATE TABLE IF NOT EXISTS epics (
     id TEXT PRIMARY KEY, title TEXT NOT NULL, path TEXT NOT NULL, created TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'empty'
+  )`);
+  db.run(sql`CREATE TABLE IF NOT EXISTS milestones (
+    id TEXT PRIMARY KEY,
+    epic_id TEXT NOT NULL REFERENCES epics(id) ON DELETE CASCADE,
+    title TEXT NOT NULL, path TEXT NOT NULL, created TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'empty'
   )`);
   db.run(sql`CREATE TABLE IF NOT EXISTS waves (
@@ -39,6 +45,7 @@ function ensureTables(db: BacklogDb): void {
       // Column already exists — expected for new DBs or re-runs
     }
   };
+  migrateCol('epics', 'status', 'empty');
   migrateCol('milestones', 'status', 'empty');
   migrateCol('waves', 'status', 'empty');
   migrateCol('slices', 'created', '');

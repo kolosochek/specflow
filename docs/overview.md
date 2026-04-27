@@ -6,30 +6,34 @@ specflow is built around four axioms. Everything else in the spec is a consequen
 
 ## Axiom 1 — Markdown files are the source of truth
 
-Every milestone, wave, and slice is a Markdown file with **YAML frontmatter** and a **fixed set of `## headings`**. Files live under `backlog/` in git and are the only place where definitions are authored.
+Every epic, milestone, wave, and slice is a Markdown file with **YAML frontmatter** and a **fixed set of `## headings`**. Files live under `backlog/` in git and are the only place where definitions are authored.
 
 ```
 <repo>/
 ├── backlog/
 │   ├── templates/
+│   │   ├── epic.md
 │   │   ├── milestone.md
 │   │   ├── wave.md
 │   │   └── slice.md
-│   └── M001-redesign-auth/                 # your real work goes here
-│       ├── milestone.md
-│       └── waves/
-│           └── W001-extract-session-store/
-│               ├── wave.md
-│               └── slices/
-│                   ├── S001-add-session-table.md
-│                   └── S002-wire-up-middleware.md
-├── examples/sample-backlog/                # reference example, NOT scanned by CLI
-├── backlog.sqlite                          # projection — gitignored
-├── scripts/ticket.ts                       # CLI (reference impl.)
-└── src/backlog/                            # parser, checklist, state, sync (reference impl.)
+│   └── E001-platform-redesign/                       # your real work goes here
+│       ├── epic.md
+│       └── milestones/
+│           └── M001-redesign-auth/
+│               ├── milestone.md
+│               └── waves/
+│                   └── W001-extract-session-store/
+│                       ├── wave.md
+│                       └── slices/
+│                           ├── S001-add-session-table.md
+│                           └── S002-wire-up-middleware.md
+├── examples/sample-backlog/                          # reference example, NOT scanned by CLI
+├── backlog.sqlite                                    # projection — gitignored
+├── scripts/ticket.ts                                 # CLI (reference impl.)
+└── src/backlog/                                      # parser, checklist, state, sync (reference impl.)
 ```
 
-> 📂 For a real, hand-written milestone with 5 waves and 10 slices, see [`examples/sample-backlog/`](../examples/sample-backlog/).
+> 📂 For a real, hand-written epic with 1 milestone, 5 waves and 10 slices, see [`examples/sample-backlog/`](../examples/sample-backlog/).
 
 > 💡 **Implication.** You can blow away the SQLite database at any time and `ticket sync` rebuilds it from the filesystem. Definitions cannot be lost as long as git is intact.
 
@@ -39,16 +43,16 @@ Every milestone, wave, and slice is a Markdown file with **YAML frontmatter** an
 
 A `backlog.sqlite` database mirrors the filesystem in two kinds of tables:
 
-| Kind                   | Tables                              | Source                            | Mutable by                |
-| ---------------------- | ----------------------------------- | --------------------------------- | ------------------------- |
-| **Definition tables**  | `milestones`, `waves`, `slices`     | Rebuilt from MD via `sync`        | _read-only_ to CLI users  |
-| **Runtime state**      | `wave_state`, `slice_state`         | Created/updated by CLI commands   | only the CLI              |
+| Kind                   | Tables                                          | Source                            | Mutable by                |
+| ---------------------- | ----------------------------------------------- | --------------------------------- | ------------------------- |
+| **Definition tables**  | `epics`, `milestones`, `waves`, `slices`        | Rebuilt from MD via `sync`        | _read-only_ to CLI users  |
+| **Runtime state**      | `wave_state`, `slice_state`                     | Created/updated by CLI commands   | only the CLI              |
 
 Definition tables hold what was *written* (title, path, content-readiness `status`). Runtime state holds what is *happening* (`draft → ready_to_dev → claimed → in_progress → done`, plus `assignedTo`, `branch`, `pr`).
 
 > 💡 **Implication.** "Status" appears in two places that look similar but are unrelated:
-> - **Content readiness** (`status: empty | milestone_defined | wave_defined | slice_defined`) — written into the MD frontmatter, sourced from a checklist.
-> - **Execution state** (`draft | ready_to_dev | claimed | in_progress | done`) — lives only in `wave_state` / `slice_state`, never in MD, never in git.
+> - **Content readiness** (`status: empty | epic_defined | milestone_defined | wave_defined | slice_defined`) — written into the MD frontmatter, sourced from a checklist.
+> - **Execution state** (`draft | ready_to_dev | claimed | in_progress | done`) — lives only in `wave_state` / `slice_state`, never in MD, never in git. Epic and milestone execution status are **derived** on the fly, not stored.
 
 ---
 
@@ -105,16 +109,19 @@ See [lifecycle.md](lifecycle.md) for the full state machines and gate logic.
 Identifiers are never written by hand. They are **derived from directory names** by the parser:
 
 ```
+E\d{3}    →   E001
 M\d{3}    →   M001
 W\d{3}    →   W001
 S\d{3}    →   S001
 
 Composite IDs:
-  Wave   = <Milestone>/<Wave>           e.g. M001/W001
-  Slice  = <Milestone>/<Wave>/<Slice>   e.g. M001/W001/S001
+  Epic       = <Epic>                                   e.g. E001
+  Milestone  = <Epic>/<Milestone>                       e.g. E001/M001
+  Wave       = <Epic>/<Milestone>/<Wave>                e.g. E001/M001/W001
+  Slice      = <Epic>/<Milestone>/<Wave>/<Slice>        e.g. E001/M001/W001/S001
 ```
 
-A milestone directory must match `M\d{3}-<slug>/`, a wave directory `W\d{3}-<slug>/`, and a slice file `S\d{3}-<slug>.md`. The slug is informative for humans; the prefix is the authoritative ID.
+An epic directory must match `E\d{3}-<slug>/`, a milestone directory `M\d{3}-<slug>/` (under `<epic>/milestones/`), a wave directory `W\d{3}-<slug>/` (under `<milestone>/waves/`), and a slice file `S\d{3}-<slug>.md` (under `<wave>/slices/`). The slug is informative for humans; the prefix is the authoritative ID.
 
 > 💡 **Implication.** Renaming a slug doesn't change the ID. Reordering slices means renumbering the prefixes — which is an explicit, file-rename operation visible in git diff.
 
@@ -122,11 +129,14 @@ A milestone directory must match `M\d{3}-<slug>/`, a wave directory `W\d{3}-<slu
 
 ## What an agent sees
 
-When an agent picks up a wave, it sees three things in order:
+When an agent picks up a wave, it reads four things in order — climbing the hierarchy for context, then descending for the plan:
 
-1. The **wave document** — context, scope overview, slice summary.
-2. The **slice documents in numerical order** — the execution plan.
-3. The **execution protocol** in [agent-protocol.md](agent-protocol.md) — pickup, slice loop, finish, prohibitions.
+1. The parent **epic document** — strategic context (the *why long-term*).
+2. The parent **milestone document** — release-aligned context (the *why now*).
+3. The **wave document** — context, scope overview, slice summary.
+4. The **slice documents in numerical order** — the execution plan.
+
+Plus the **execution protocol** in [agent-protocol.md](agent-protocol.md) — pickup, slice loop, finish, prohibitions.
 
 The agent never invents structure. It reads → claims → executes → reports. Everything that *could* differ between two waves is in the documents; everything that's the *same* across all waves is in the protocol.
 

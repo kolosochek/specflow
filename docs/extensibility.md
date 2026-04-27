@@ -201,10 +201,64 @@ A: It is, and on purpose:
 
 ## Versioning
 
-`v0.1` is the version captured here. Compatibility intent for future versions:
+Compatibility intent:
 
-- **Patch (v0.1.x)** — bug fixes, no schema or grammar changes.
-- **Minor (v0.2)** — new optional sections, new commands, new statuses, new optional frontmatter fields. Existing artefacts continue to validate.
-- **Major (v1.0)** — required field changes, removed sections, breaking grammar changes. Migration path documented.
+- **Patch (vX.Y.z)** — bug fixes, no schema or grammar changes.
+- **Minor (vX.y)** — new optional sections, new commands, new statuses, new optional frontmatter fields. Existing artefacts continue to validate.
+- **Major (vx.0)** — required field changes, removed sections, breaking grammar changes. Migration path documented.
 
-When formalizing one of the observed-but-unvalidated patterns, that's a `v0.2` event — write the formalization, run `validate --fix` to backfill, ship.
+### Released
+
+| Version | Shipped                                                                                                  |
+| ------- | -------------------------------------------------------------------------------------------------------- |
+| `v0.1`  | Initial extraction from `hhru`. Three-layer model: Milestone → Wave → Slice. 52 unit tests, no Epic.     |
+| `v0.2`  | **Breaking.** Epic layer added on top. 4-level composite IDs. Slash commands. CI. Live backlog.           |
+
+### v0.1 → v0.2 migration
+
+`v0.2` adds an **Epic** layer above Milestone. Existing v0.1 backlogs need restructuring:
+
+```bash
+# 1. Pick a slug for the new top-level epic
+EPIC_SLUG="E001-platform-redesign"
+
+# 2. Create the epic shell
+mkdir -p backlog/$EPIC_SLUG/milestones
+cat > backlog/$EPIC_SLUG/epic.md <<EOF
+---
+title: <your epic title>
+created: $(date -I)
+status: empty
+---
+
+## Goal
+
+<rolled-up rationale that spans your existing milestones>
+
+## Success criteria
+
+- <observable outcome 1>
+- <observable outcome 2>
+EOF
+
+# 3. Move existing milestones into milestones/
+mv backlog/M*-* backlog/$EPIC_SLUG/milestones/
+
+# 4. Drop the old DB — it has the old schema
+rm -f backlog.sqlite backlog.sqlite-shm backlog.sqlite-wal
+
+# 5. Re-sync
+npm run ticket sync
+
+# 6. Promote the epic when goal + criteria are written
+npm run ticket checklist E001 --promote
+```
+
+**Loss:** all execution state (`wave_state`, `slice_state`) is reset to `draft`. Content readiness is preserved (it's in MD). Branch and PR URLs of completed waves are lost — record them in the new epic's success criteria as historical proof if needed.
+
+### Future
+
+- **`v0.3`** — CLI/git decoupling. See [proposal](proposals/cli-vcs-decoupling.md). No grammar change.
+- **`v1.0`** — formalize observed divergences (`milestone_criteria`, etc.); spec ↔ code drift detection becomes a CI step.
+
+When formalizing one of the observed-but-unvalidated patterns, that's a minor-version event — write the formalization, run `validate --fix` to backfill, ship.
