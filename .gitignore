@@ -1,0 +1,17 @@
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Node
+node_modules/
+npm-debug.log*
+*.tsbuildinfo
+dist/
+
+# Specflow runtime state — DB is a projection, never commit it
+backlog.sqlite
+backlog.sqlite-shm
+backlog.sqlite-wal
