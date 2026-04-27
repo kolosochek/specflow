@@ -87,4 +87,42 @@ describe('commitMessageFor', () => {
     );
     expect(src).toMatch(/commitMessageFor\(\s*\{[^}]*type:\s*['"]wave['"]/);
   });
+
+  it('default template renders for every CompositeType (epic / milestone / wave / slice)', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: spot-check the default template across all four type values
+    // INPUT: same id 'X1', same title 'T', cycling type
+    // EXPECTED: each output is '[backlog] create X1: T' regardless of type (default template ignores {{type}})
+    for (const type of ['epic', 'milestone', 'wave', 'slice'] as const) {
+      const out = commitMessageFor({ id: 'X1', title: 'T', type }, {});
+      expect(out).toBe('[backlog] create X1: T');
+    }
+  });
+
+  it('cli-actions.ts contains exactly four call sites (one per create-* action)', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: every create-* action routes through commitMessageFor — not just wave
+    // INPUT: read cli-actions.ts and count occurrences of 'commitMessageFor('
+    // EXPECTED: exactly 4 call sites — epic, milestone, wave, slice
+    const src = readFileSync(
+      join(process.cwd(), 'src', 'backlog', 'cli-actions.ts'),
+      'utf-8',
+    );
+    const matches = src.match(/commitMessageFor\(/g) ?? [];
+    expect(matches.length).toBe(4);
+  });
+
+  it('commits.ts is the only place the default literal "[backlog] create" lives', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: greppable single-source-of-truth invariant for the default commit prefix
+    // INPUT: scan cli-actions.ts and ticket.ts for the literal '[backlog] create'
+    // EXPECTED: zero matches in either (the literal lives only inside commits.ts)
+    const cliActions = readFileSync(
+      join(process.cwd(), 'src', 'backlog', 'cli-actions.ts'),
+      'utf-8',
+    );
+    const ticket = readFileSync(join(process.cwd(), 'scripts', 'ticket.ts'), 'utf-8');
+    expect(cliActions).not.toMatch(/\[backlog\] create/);
+    expect(ticket).not.toMatch(/\[backlog\] create/);
+  });
 });

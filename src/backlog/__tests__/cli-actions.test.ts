@@ -276,4 +276,211 @@ describe('cli-actions', () => {
     const ticketSrc = readFileSync(join(process.cwd(), 'scripts', 'ticket.ts'), 'utf-8');
     expect(ticketSrc).not.toMatch(/execSync\(\s*['"`]git\s+(add|commit)/);
   });
+
+  it('createMilestoneAction with NullAdapter writes file but skips commit', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: parametrize createMilestoneAction over the two adapters — NullAdapter branch
+    // INPUT: pre-seeded epic, NullAdapter, title 'M-null'
+    // EXPECTED: milestone.md exists; commit count unchanged from baseline
+    const git = new GitAdapter({ cwd: repo.root });
+    const deps = {
+      vcs: git,
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      templatesDir: repo.templatesDir,
+    };
+    await createEpicAction({ ...deps, title: 'P' });
+    const baseline = commitCount(repo.root);
+    await createMilestoneAction({
+      ...deps,
+      vcs: new NullAdapter(),
+      epicId: 'E001',
+      title: 'M-null',
+    });
+    expect(
+      existsSync(join(repo.backlog, 'E001-p', 'milestones', 'M001-m-null', 'milestone.md')),
+    ).toBe(true);
+    expect(commitCount(repo.root)).toBe(baseline);
+  });
+
+  it('createWaveAction with NullAdapter writes file but skips commit', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: parametrize createWaveAction over the two adapters — NullAdapter branch
+    // INPUT: pre-seeded epic+milestone, NullAdapter, title 'W-null'
+    // EXPECTED: wave.md exists; commit count unchanged from baseline
+    const git = new GitAdapter({ cwd: repo.root });
+    const deps = {
+      vcs: git,
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      templatesDir: repo.templatesDir,
+    };
+    await createEpicAction({ ...deps, title: 'P' });
+    await createMilestoneAction({ ...deps, epicId: 'E001', title: 'M' });
+    const baseline = commitCount(repo.root);
+    await createWaveAction({
+      ...deps,
+      vcs: new NullAdapter(),
+      parentId: 'E001/M001',
+      title: 'W-null',
+    });
+    expect(
+      existsSync(
+        join(repo.backlog, 'E001-p', 'milestones', 'M001-m', 'waves', 'W001-w-null', 'wave.md'),
+      ),
+    ).toBe(true);
+    expect(commitCount(repo.root)).toBe(baseline);
+  });
+
+  it('createMilestoneAction rejects when parent epic does not exist', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: parent-not-found error path on createMilestoneAction
+    // INPUT: empty backlog, attempt to create milestone under nonexistent E099
+    // EXPECTED: action rejects with Error mentioning 'Epic E099 not found'
+    let caught: unknown = null;
+    try {
+      await createMilestoneAction({
+        vcs: new NullAdapter(),
+        projectRoot: repo.root,
+        backlogDir: repo.backlog,
+        templatesDir: repo.templatesDir,
+        epicId: 'E099',
+        title: 'M',
+      });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/Epic E099 not found/);
+  });
+
+  it('createWaveAction rejects on malformed parent id', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: input-validation error path — parent id missing the '/' separator
+    // INPUT: parentId='E001' (no milestone segment)
+    // EXPECTED: action rejects with Error mentioning '<epic-id>/<milestone-id>'
+    let caught: unknown = null;
+    try {
+      await createWaveAction({
+        vcs: new NullAdapter(),
+        projectRoot: repo.root,
+        backlogDir: repo.backlog,
+        templatesDir: repo.templatesDir,
+        parentId: 'E001',
+        title: 'W',
+      });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/<epic-id>\/<milestone-id>/);
+  });
+
+  it('createSliceAction increments S-number per existing siblings', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: nextNumber('S', slicesDir) keeps incrementing across multiple slices in the same wave
+    // INPUT: create 3 slices in a row under the same wave
+    // EXPECTED: slice files exist as S001-..., S002-..., S003-... (sorted)
+    const git = new GitAdapter({ cwd: repo.root });
+    const deps = {
+      vcs: git,
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      templatesDir: repo.templatesDir,
+    };
+    await createEpicAction({ ...deps, title: 'P' });
+    await createMilestoneAction({ ...deps, epicId: 'E001', title: 'M' });
+    await createWaveAction({ ...deps, parentId: 'E001/M001', title: 'W' });
+    await createSliceAction({ ...deps, parentId: 'E001/M001/W001', title: 'first' });
+    await createSliceAction({ ...deps, parentId: 'E001/M001/W001', title: 'second' });
+    await createSliceAction({ ...deps, parentId: 'E001/M001/W001', title: 'third' });
+
+    const slicesDir = join(
+      repo.backlog,
+      'E001-p',
+      'milestones',
+      'M001-m',
+      'waves',
+      'W001-w',
+      'slices',
+    );
+    expect(existsSync(join(slicesDir, 'S001-first.md'))).toBe(true);
+    expect(existsSync(join(slicesDir, 'S002-second.md'))).toBe(true);
+    expect(existsSync(join(slicesDir, 'S003-third.md'))).toBe(true);
+  });
+
+  it('validateAndFixAction handles multiple files needing fix in one pass', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: validateAndFixAction touches every fixable file and produces a single bulk commit
+    // INPUT: an epic + a milestone + a wave, all with status field stripped, then run --fix with GitAdapter
+    // EXPECTED: returns fixed=3; all three files now contain status: empty; one new commit recorded
+    const git = new GitAdapter({ cwd: repo.root });
+    const deps = {
+      vcs: git,
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      templatesDir: repo.templatesDir,
+    };
+    await createEpicAction({ ...deps, title: 'Multi' });
+    await createMilestoneAction({ ...deps, epicId: 'E001', title: 'M' });
+    await createWaveAction({ ...deps, parentId: 'E001/M001', title: 'W' });
+
+    const epicMd = join(repo.backlog, 'E001-multi', 'epic.md');
+    const mileMd = join(repo.backlog, 'E001-multi', 'milestones', 'M001-m', 'milestone.md');
+    const waveMd = join(
+      repo.backlog,
+      'E001-multi',
+      'milestones',
+      'M001-m',
+      'waves',
+      'W001-w',
+      'wave.md',
+    );
+    const strip = (path: string) => {
+      const c = readFileSync(path, 'utf-8');
+      writeFileSync(path, c.replace(/^status:.*$/m, '').replace(/\n\n+/g, '\n'));
+    };
+    // Use slightly different titles per file so gray-matter's content cache cannot collapse them
+    const sub = (path: string, marker: string) => {
+      const c = readFileSync(path, 'utf-8');
+      writeFileSync(path, c.replace(/^title:.*$/m, `title: ${marker}`));
+    };
+    strip(epicMd); sub(epicMd, 'multi-epic');
+    strip(mileMd); sub(mileMd, 'multi-milestone');
+    strip(waveMd); sub(waveMd, 'multi-wave');
+    execFileSync('git', ['add', '-A'], { cwd: repo.root });
+    execFileSync('git', ['commit', '-m', 'break-multi'], { cwd: repo.root });
+
+    const baseline = commitCount(repo.root);
+    const result = await validateAndFixAction({
+      vcs: git,
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+    });
+
+    expect(result.fixed).toBe(3);
+    expect(result.errors).toBe(0);
+    expect(readFileSync(epicMd, 'utf-8')).toMatch(/^status: empty$/m);
+    expect(readFileSync(mileMd, 'utf-8')).toMatch(/^status: empty$/m);
+    expect(readFileSync(waveMd, 'utf-8')).toMatch(/^status: empty$/m);
+    expect(commitCount(repo.root)).toBe(baseline + 1);
+    expect(lastSubject(repo.root)).toBe('[backlog] migrate: add content readiness fields');
+  });
+
+  it('validateAndFixAction with no fixable files makes no commit', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: empty / clean backlog should not produce a vacuous '[backlog] migrate' commit
+    // INPUT: empty backlog dir, GitAdapter
+    // EXPECTED: returns fixed=0, errors=0; commitCount unchanged
+    mkdirSync(repo.backlog, { recursive: true });
+    const baseline = commitCount(repo.root);
+    const result = await validateAndFixAction({
+      vcs: new GitAdapter({ cwd: repo.root }),
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+    });
+    expect(result.fixed).toBe(0);
+    expect(result.errors).toBe(0);
+    expect(commitCount(repo.root)).toBe(baseline);
+  });
 });
