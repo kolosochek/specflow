@@ -5,6 +5,7 @@ import matter from 'gray-matter';
 import { z } from 'zod';
 import { classifyFile } from './parser.js';
 import type { VcsAdapter } from './vcs.js';
+import { commitMessageFor } from './commits.js';
 
 interface BaseDeps {
   vcs: VcsAdapter;
@@ -87,7 +88,7 @@ export async function createEpicAction(
   writeFileSync(epicPath, content);
 
   await vcs.stage([dir]);
-  await vcs.commit(`[backlog] create ${id}: ${title}`);
+  await vcs.commit(commitMessageFor({ id, title, type: 'epic' }));
   return { id, paths: [dir] };
 }
 
@@ -112,7 +113,7 @@ export async function createMilestoneAction(
 
   const compositeId = `${epicId}/${milestoneId}`;
   await vcs.stage([dir]);
-  await vcs.commit(`[backlog] create ${compositeId}: ${title}`);
+  await vcs.commit(commitMessageFor({ id: compositeId, title, type: 'milestone' }));
   return { id: compositeId, paths: [dir] };
 }
 
@@ -141,7 +142,7 @@ export async function createWaveAction(
 
   const compositeId = `${epicId}/${milestoneId}/${waveId}`;
   await vcs.stage([dir]);
-  await vcs.commit(`[backlog] create ${compositeId}: ${title}`);
+  await vcs.commit(commitMessageFor({ id: compositeId, title, type: 'wave' }));
   return { id: compositeId, paths: [dir] };
 }
 
@@ -170,7 +171,7 @@ export async function createSliceAction(
 
   const compositeId = `${epicId}/${milestoneId}/${waveId}/${sliceId}`;
   await vcs.stage([filePath]);
-  await vcs.commit(`[backlog] create ${compositeId}: ${title}`);
+  await vcs.commit(commitMessageFor({ id: compositeId, title, type: 'slice' }));
   return { id: compositeId, paths: [filePath] };
 }
 
