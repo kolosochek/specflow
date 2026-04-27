@@ -1,6 +1,5 @@
 import { resolve, join, basename } from 'path';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, globSync } from 'fs';
-import { execSync } from 'child_process';
+import { existsSync, readFileSync, writeFileSync, globSync } from 'fs';
 import { createBacklogDb, schema } from '../src/backlog/db.js';
 import { fullSync, targetedSync } from '../src/backlog/sync.js';
 import {
@@ -11,6 +10,13 @@ import {
 import { classifyFile } from '../src/backlog/parser.js';
 import { checkEpic, checkMilestone, checkWave, checkSlice } from '../src/backlog/checklist.js';
 import { selectVcs } from '../src/backlog/vcs-select.js';
+import {
+  createEpicAction,
+  createMilestoneAction,
+  createWaveAction,
+  createSliceAction,
+  validateAndFixAction,
+} from '../src/backlog/cli-actions.js';
 import { eq } from 'drizzle-orm';
 import matter from 'gray-matter';
 import { z } from 'zod';
@@ -26,28 +32,30 @@ const [, , command, ...args] = process.argv;
 
 const vcs = selectVcs(args, process.env, { cwd: PROJECT_ROOT });
 
-try {
-  switch (command) {
-    case 'list': cmdList(); break;
-    case 'show': cmdShow(args[0]); break;
-    case 'promote': cmdPromote(args[0]); break;
-    case 'claim': cmdClaim(args[0], args[1]); break;
-    case 'status': cmdStatus(args[0], args[1]); break;
-    case 'done': cmdDone(args); break;
-    case 'slice-done': cmdSliceDone(args[0]); break;
-    case 'reset': cmdReset(args[0]); break;
-    case 'create': cmdCreate(args[0], args.slice(1)); break;
-    case 'checklist': cmdChecklist(args[0], args.includes('--promote')); break;
-    case 'sync': cmdSync(); break;
-    case 'validate': cmdValidate(); break;
-    default:
-      console.error(`Unknown command: ${command}`);
-      console.error('Usage: npm run ticket <list|show|promote|claim|status|done|slice-done|reset|create|checklist|sync|validate>');
-      process.exit(1);
+await (async () => {
+  try {
+    switch (command) {
+      case 'list': cmdList(); break;
+      case 'show': cmdShow(args[0]); break;
+      case 'promote': cmdPromote(args[0]); break;
+      case 'claim': cmdClaim(args[0], args[1]); break;
+      case 'status': cmdStatus(args[0], args[1]); break;
+      case 'done': cmdDone(args); break;
+      case 'slice-done': cmdSliceDone(args[0]); break;
+      case 'reset': cmdReset(args[0]); break;
+      case 'create': await cmdCreate(args[0], args.slice(1)); break;
+      case 'checklist': cmdChecklist(args[0], args.includes('--promote')); break;
+      case 'sync': cmdSync(); break;
+      case 'validate': await cmdValidate(); break;
+      default:
+        console.error(`Unknown command: ${command}`);
+        console.error('Usage: npm run ticket <list|show|promote|claim|status|done|slice-done|reset|create|checklist|sync|validate>');
+        process.exit(1);
+    }
+  } finally {
+    close();
   }
-} finally {
-  close();
-}
+})();
 
 // --- Helpers for path lookup with 4-level hierarchy ---
 
@@ -214,54 +222,14 @@ function cmdReset(id: string) {
 
 // --- Create commands ---
 
-function slugify(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
-
-function nextNumber(dir: string, prefix: string): string {
-  if (!existsSync(dir)) return '001';
-  const entries = readdirSync(dir);
-  const numbers = entries
-    .map(e => e.match(new RegExp(`^${prefix}(\\d{3})-`)))
-    .filter((m): m is RegExpMatchArray => m !== null)
-    .map(m => parseInt(m[1], 10));
-  const max = numbers.length > 0 ? Math.max(...numbers) : 0;
-  return String(max + 1).padStart(3, '0');
-}
-
-function readTemplate(name: string, fallback: string): string {
-  const p = join(TEMPLATES_DIR, name);
-  return existsSync(p) ? readFileSync(p, 'utf-8') : fallback;
-}
-
-function fillTemplate(template: string, title: string): string {
-  const today = new Date().toISOString().slice(0, 10);
-  return template
-    .replace(/^title:.*$/m, `title: ${title}`)
-    .replace(/^created:.*$/m, `created: ${today}`);
-}
-
-function gitCommit(addPath: string, message: string): void {
-  execSync(`git add "${addPath}" && git commit -m "${message}"`, { cwd: PROJECT_ROOT });
-}
-
-function cmdCreate(type: string, createArgs: string[]) {
+async function cmdCreate(type: string, createArgs: string[]) {
   if (!type) { console.error('Usage: ticket create <epic|milestone|wave|slice> ...'); process.exit(1); }
+  const baseDeps = { vcs, projectRoot: PROJECT_ROOT, backlogDir: BACKLOG_DIR, templatesDir: TEMPLATES_DIR };
 
   if (type === 'epic') {
     const title = createArgs[0];
     if (!title) { console.error('Usage: ticket create epic "<title>"'); process.exit(1); }
-    mkdirSync(BACKLOG_DIR, { recursive: true });
-    const num = nextNumber(BACKLOG_DIR, 'E');
-    const slug = slugify(title);
-    const id = `E${num}`;
-    const dir = join(BACKLOG_DIR, `${id}-${slug}`);
-    mkdirSync(join(dir, 'milestones'), { recursive: true });
-
-    const fallback = `---\ntitle: ${title}\ncreated: ${new Date().toISOString().slice(0, 10)}\nstatus: empty\n---\n\n## Goal\n\n## Success criteria\n`;
-    const content = fillTemplate(readTemplate('epic.md', fallback), title);
-    writeFileSync(join(dir, 'epic.md'), content);
-    gitCommit(dir, `[backlog] create ${id}: ${title}`);
+    const { id } = await createEpicAction({ ...baseDeps, title });
     fullSync(db, BACKLOG_DIR);
     console.log(`Created ${id}: ${title}`);
 
@@ -269,76 +237,25 @@ function cmdCreate(type: string, createArgs: string[]) {
     const epicId = createArgs[0];
     const title = createArgs[1];
     if (!epicId || !title) { console.error('Usage: ticket create milestone <epic-id> "<title>"'); process.exit(1); }
-
-    const eDir = epicDir(epicId);
-    if (!eDir) { console.error(`Epic ${epicId} not found`); process.exit(1); }
-    const milestonesDir = join(eDir, 'milestones');
-    mkdirSync(milestonesDir, { recursive: true });
-
-    const num = nextNumber(milestonesDir, 'M');
-    const slug = slugify(title);
-    const milestoneId = `M${num}`;
-    const dir = join(milestonesDir, `${milestoneId}-${slug}`);
-    mkdirSync(join(dir, 'waves'), { recursive: true });
-
-    const fallback = `---\ntitle: ${title}\ncreated: ${new Date().toISOString().slice(0, 10)}\nstatus: empty\n---\n\n## Goal\n\n## Success criteria\n`;
-    const content = fillTemplate(readTemplate('milestone.md', fallback), title);
-    writeFileSync(join(dir, 'milestone.md'), content);
-    const compositeId = `${epicId}/${milestoneId}`;
-    gitCommit(dir, `[backlog] create ${compositeId}: ${title}`);
+    const { id } = await createMilestoneAction({ ...baseDeps, epicId, title });
     fullSync(db, BACKLOG_DIR);
-    console.log(`Created ${compositeId}: ${title}`);
+    console.log(`Created ${id}: ${title}`);
 
   } else if (type === 'wave') {
     const parentId = createArgs[0];
     const title = createArgs[1];
     if (!parentId || !title) { console.error('Usage: ticket create wave <epic-id>/<milestone-id> "<title>"'); process.exit(1); }
-    const [epicId, milestoneId] = parentId.split('/');
-    if (!epicId || !milestoneId) { console.error('Wave parent must be in form <epic-id>/<milestone-id>'); process.exit(1); }
-
-    const mDir = milestoneDir(epicId, milestoneId);
-    if (!mDir) { console.error(`Milestone ${parentId} not found`); process.exit(1); }
-    const wavesDir = join(mDir, 'waves');
-    mkdirSync(wavesDir, { recursive: true });
-
-    const num = nextNumber(wavesDir, 'W');
-    const slug = slugify(title);
-    const waveId = `W${num}`;
-    const dir = join(wavesDir, `${waveId}-${slug}`);
-    mkdirSync(join(dir, 'slices'), { recursive: true });
-
-    const fallback = `---\ntitle: ${title}\ncreated: ${new Date().toISOString().slice(0, 10)}\nstatus: empty\n---\n\n## Context\n\n## Scope overview\n\n## Slices summary\n`;
-    const content = fillTemplate(readTemplate('wave.md', fallback), title);
-    writeFileSync(join(dir, 'wave.md'), content);
-    const compositeId = `${epicId}/${milestoneId}/${waveId}`;
-    gitCommit(dir, `[backlog] create ${compositeId}: ${title}`);
+    const { id } = await createWaveAction({ ...baseDeps, parentId, title });
     fullSync(db, BACKLOG_DIR);
-    console.log(`Created ${compositeId}: ${title}`);
+    console.log(`Created ${id}: ${title}`);
 
   } else if (type === 'slice') {
     const parentId = createArgs[0];
     const title = createArgs[1];
     if (!parentId || !title) { console.error('Usage: ticket create slice <epic-id>/<milestone-id>/<wave-id> "<title>"'); process.exit(1); }
-    const [epicId, milestoneId, waveId] = parentId.split('/');
-    if (!epicId || !milestoneId || !waveId) { console.error('Slice parent must be in form <epic-id>/<milestone-id>/<wave-id>'); process.exit(1); }
-
-    const wDir = waveDir(epicId, milestoneId, waveId);
-    if (!wDir) { console.error(`Wave ${parentId} not found`); process.exit(1); }
-    const slicesDir = join(wDir, 'slices');
-    mkdirSync(slicesDir, { recursive: true });
-
-    const num = nextNumber(slicesDir, 'S');
-    const slug = slugify(title);
-    const sliceId = `S${num}`;
-    const fileName = `${sliceId}-${slug}.md`;
-
-    const fallback = `---\ntitle: ${title}\ncreated: ${new Date().toISOString().slice(0, 10)}\nstatus: empty\n---\n\n## Context\n\n## Assumptions\n\n## Scope\n\n## Requirements\n\n## Test expectations\n\n## Acceptance criteria\n`;
-    const content = fillTemplate(readTemplate('slice.md', fallback), title);
-    writeFileSync(join(slicesDir, fileName), content);
-    const compositeId = `${epicId}/${milestoneId}/${waveId}/${sliceId}`;
-    gitCommit(join(slicesDir, fileName), `[backlog] create ${compositeId}: ${title}`);
+    const { id } = await createSliceAction({ ...baseDeps, parentId, title });
     fullSync(db, BACKLOG_DIR);
-    console.log(`Created ${compositeId}: ${title}`);
+    console.log(`Created ${id}: ${title}`);
 
   } else {
     console.error(`Unknown type: ${type}. Use: epic, milestone, wave, slice`);
@@ -436,19 +353,36 @@ function cmdSync() {
   console.log('Sync complete');
 }
 
-function cmdValidate() {
+async function cmdValidate() {
   const fix = args.includes('--fix');
+
+  if (fix) {
+    const { errors, fixed } = await validateAndFixAction({
+      vcs,
+      projectRoot: PROJECT_ROOT,
+      backlogDir: BACKLOG_DIR,
+    });
+    if (fixed > 0) {
+      fullSync(db, BACKLOG_DIR);
+      console.log(`\n${fixed} file(s) fixed and committed.`);
+    }
+    if (errors > 0) {
+      console.error(`\n${errors} file(s) with errors`);
+      process.exit(1);
+    }
+    return;
+  }
+
   const files = globSync('**/*.md', { cwd: BACKLOG_DIR })
     .filter(f => !f.startsWith('templates/'))
     .map(f => join(BACKLOG_DIR, f));
   let errors = 0;
-  let fixed = 0;
-  const fixedFiles: string[] = [];
 
-  const epicFm = z.object({ title: z.string(), created: z.string(), status: z.string().optional() });
-  const milestoneFm = z.object({ title: z.string(), created: z.string(), status: z.string().optional() });
-  const waveFm = z.object({ title: z.string(), created: z.string(), status: z.string().optional() });
-  const sliceFm = z.object({ title: z.string(), created: z.string().optional(), status: z.string().optional() });
+  const yamlDate = z.union([z.string(), z.date()]);
+  const epicFm = z.object({ title: z.string(), created: yamlDate, status: z.string().optional() });
+  const milestoneFm = z.object({ title: z.string(), created: yamlDate, status: z.string().optional() });
+  const waveFm = z.object({ title: z.string(), created: yamlDate, status: z.string().optional() });
+  const sliceFm = z.object({ title: z.string(), created: yamlDate.optional(), status: z.string().optional() });
 
   for (const file of files) {
     const relPath = 'backlog/' + file.slice(BACKLOG_DIR.length + 1);
@@ -457,58 +391,17 @@ function cmdValidate() {
 
     const content = readFileSync(file, 'utf-8');
     const { data } = matter(content);
-
     const schemaMap = { epic: epicFm, milestone: milestoneFm, wave: waveFm, slice: sliceFm };
     const result = schemaMap[type].safeParse(data);
     if (!result.success) {
       console.error(`❌ ${relPath}: ${result.error.issues.map(i => i.message).join(', ')}`);
       errors++;
-      continue;
-    }
-
-    if (fix) {
-      const parsed = matter(content);
-      let changed = false;
-
-      if (!parsed.data.status) {
-        parsed.data.status = 'empty';
-        changed = true;
-      }
-
-      if (type === 'slice' && !parsed.data.created) {
-        try {
-          const gitDate = execSync(
-            `git log --diff-filter=A --follow --format=%aI -- "${file}" | tail -1`,
-            { cwd: PROJECT_ROOT, encoding: 'utf-8' },
-          ).trim();
-          parsed.data.created = gitDate ? gitDate.slice(0, 10) : new Date().toISOString().slice(0, 10);
-        } catch {
-          parsed.data.created = new Date().toISOString().slice(0, 10);
-        }
-        changed = true;
-      }
-
-      if (changed) {
-        writeFileSync(file, matter.stringify(parsed.content, parsed.data));
-        fixedFiles.push(file);
-        fixed++;
-        console.log(`✓ ${relPath}: fixed`);
-      }
     }
   }
 
-  if (fix && fixed > 0) {
-    for (const f of fixedFiles) {
-      execSync(`git add "${f}"`, { cwd: PROJECT_ROOT });
-    }
-    execSync(`git commit -m "[backlog] migrate: add content readiness fields"`, { cwd: PROJECT_ROOT });
-    fullSync(db, BACKLOG_DIR);
-    console.log(`\n${fixed} file(s) fixed and committed.`);
-  }
-
-  if (errors === 0 && !fix) {
+  if (errors === 0) {
     console.log('✓ All files valid');
-  } else if (errors > 0) {
+  } else {
     console.error(`\n${errors} file(s) with errors`);
     process.exit(1);
   }
