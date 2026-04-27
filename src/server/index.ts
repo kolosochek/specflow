@@ -2,11 +2,13 @@ import express from 'express';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { router } from './trpc.js';
 import { backlogRouter } from './routers/backlog.js';
+import { agentRouter } from './routers/agent.js';
 import { resolve } from 'path';
 import { existsSync } from 'fs';
 
 export const appRouter = router({
   backlog: backlogRouter,
+  agent: agentRouter,
 });
 
 export type AppRouter = typeof appRouter;
