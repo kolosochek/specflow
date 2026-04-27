@@ -1,40 +1,11 @@
 import matter from 'gray-matter';
-import { z } from 'zod';
 import { basename } from 'path';
-
-// --- Zod helper: gray-matter parses YAML dates as Date objects ---
-// This schema accepts both string and Date, normalizing Date to 'YYYY-MM-DD'.
-
-const yamlDateString = z.union([
-  z.string(),
-  z.date().transform((d) => d.toISOString().split('T')[0]),
-]);
-
-// --- Zod schemas for frontmatter validation ---
-
-const epicFrontmatter = z.object({
-  title: z.string(),
-  created: yamlDateString,
-  status: z.enum(['empty', 'epic_defined']).default('empty'),
-});
-
-const milestoneFrontmatter = z.object({
-  title: z.string(),
-  created: yamlDateString,
-  status: z.enum(['empty', 'milestone_defined']).default('empty'),
-});
-
-const waveFrontmatter = z.object({
-  title: z.string(),
-  created: yamlDateString,
-  status: z.enum(['empty', 'wave_defined']).default('empty'),
-});
-
-const sliceFrontmatter = z.object({
-  title: z.string(),
-  created: yamlDateString.optional().default(''),
-  status: z.enum(['empty', 'slice_defined']).default('empty'),
-});
+import {
+  epicFrontmatter,
+  milestoneFrontmatter,
+  waveFrontmatter,
+  sliceFrontmatter,
+} from './frontmatter.js';
 
 // --- File classification ---
 
