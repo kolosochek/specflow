@@ -59,3 +59,10 @@ export class GitAdapter implements VcsAdapter {
     await runGit(this.cwd, ['worktree', 'remove', dir]);
   }
 }
+
+export class NullAdapter implements VcsAdapter {
+  async stage(_paths: string[]): Promise<void> {}
+  async commit(_message: string, _opts?: { signoff?: boolean }): Promise<void> {}
+  async openWorktree(_branch: string, _dir: string): Promise<void> {}
+  async removeWorktree(_dir: string): Promise<void> {}
+}
