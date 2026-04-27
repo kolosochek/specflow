@@ -59,4 +59,41 @@ describe('watcher removal post-conditions', () => {
     expect(cli).not.toMatch(/npm run ticket watch/);
     expect(cli).not.toMatch(/`watch`/);
   });
+
+  it('chokidar is gone from the lockfile too', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: package-lock.json no longer references chokidar (transitive removal verified)
+    // INPUT: read package-lock.json
+    // EXPECTED: no occurrence of the literal "chokidar" anywhere in the lockfile
+    const lock = readFileSync(join(ROOT, 'package-lock.json'), 'utf-8');
+    expect(lock).not.toMatch(/"chokidar"/);
+  });
+
+  it('extensibility.md states that incremental sync is not built-in', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: extensibility.md communicates the post-removal expectation set by E001/M003 success criteria
+    // INPUT: read docs/extensibility.md
+    // EXPECTED: contains a phrase explicitly stating that incremental sync is not built in
+    const ext = readFileSync(join(ROOT, 'docs', 'extensibility.md'), 'utf-8');
+    expect(ext).toMatch(/incremental sync is not (a )?built-in (feature)?/i);
+  });
+
+  it('extensibility.md cross-links to the decision record', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: future readers can find rationale via the doc → decision-record link
+    // INPUT: read docs/extensibility.md
+    // EXPECTED: contains a markdown link pointing at proposals/watcher-fate.md
+    const ext = readFileSync(join(ROOT, 'docs', 'extensibility.md'), 'utf-8');
+    expect(ext).toMatch(/\(proposals\/watcher-fate\.md\)/);
+  });
+
+  it('chokidar appears in no source file under src/ (production sweep)', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: even outside the deleted watcher.ts, no other production module references chokidar
+    // INPUT: walkSrc('src/') and grep each file for the literal "chokidar"
+    // EXPECTED: zero matches
+    const srcFiles = walkSrc(join(ROOT, 'src'));
+    const offenders = srcFiles.filter((f) => readFileSync(f, 'utf-8').includes('chokidar'));
+    expect(offenders).toEqual([]);
+  });
 });
