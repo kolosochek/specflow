@@ -3,8 +3,16 @@
 > **A microframework for spec-driven development.**
 > Formalize a strategic theme once, decompose it into reviewable units of work, and let humans or agents execute it under a strict TDD contract — without ever drifting from the spec.
 
-**Version:** `v0.2`
-**Status:** Epic layer added on top of v0.1's three-layer model. Grammar is now Epic → Milestone → Wave → Slice. Reference implementation in this repo, slash commands wired up, CI in place.
+**Version:** `v0.3.0-alpha`
+**Status:** Web UI lands. Epic → Milestone → Wave → Slice grammar, CLI, tRPC HTTP server, React + MUI kanban board, dogfooded backlog.
+
+Quick start:
+
+```bash
+npm install
+npm run dev    # tRPC server on :3030, Vite on :5173 with HMR
+# open http://localhost:5173 → live kanban for backlog/
+```
 
 ---
 
@@ -106,22 +114,33 @@ flowchart LR
 The reference implementation ships in this repo:
 
 - **CLI:** [`scripts/ticket.ts`](scripts/ticket.ts) — TypeScript, run via `tsx`.
-- **Backend:** [`src/backlog/`](src/backlog/) — `parser.ts`, `checklist.ts`, `state.ts`, `sync.ts`, `db.ts`, `schema.ts`, `watcher.ts`.
-- **Tests:** [`src/backlog/__tests__/`](src/backlog/__tests__/) — unit tests for parser, checklist, state machine, and sync.
+- **Core:** [`src/backlog/`](src/backlog/) — `parser.ts`, `checklist.ts`, `state.ts`, `sync.ts`, `db.ts`, `schema.ts`, `watcher.ts`.
+- **HTTP server:** [`src/server/`](src/server/) — Express + tRPC, routes the CLI logic over HTTP for the UI.
+- **Web UI:** [`src/client/`](src/client/) — Vite + React 19 + MUI v6 + `@trpc/react-query`. The kanban lives at [`pages/BacklogPage.tsx`](src/client/pages/BacklogPage.tsx).
+- **Tests:** [`src/backlog/__tests__/`](src/backlog/__tests__/) — unit tests for parser, checklist, state machine, and sync (66 tests).
 - **Slash commands:** [`.claude/commands/`](.claude/commands/) — `create-epic`, `create-milestone`, `create-wave`, `create-slice`.
 - **CI:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — typecheck + unit tests on Node 22 and 24.
-- **Stack:** Node.js ≥ 22 · TypeScript · `gray-matter` · `zod` · Drizzle ORM · `better-sqlite3` · `chokidar`.
+- **Stack:** Node.js ≥ 22 · TypeScript · Express 5 · tRPC 11 · React 19 · MUI 6 · Vite 6 · `gray-matter` · `zod` · Drizzle ORM · `better-sqlite3`.
 
 To run it:
 
 ```bash
 npm install
-npm test                     # runs the backlog unit tests
+npm test                     # 66 backlog unit tests
 npm run typecheck            # tsc --noEmit
 npm run ticket list          # exercise the CLI
+npm run dev                  # tRPC server on :3030, Vite on :5173
+npm run build                # builds dist/client + dist/server
+npm run start                # serves built client from the prod server
 ```
 
-Portability to other stacks (Python, Go) is **not a goal of v0.2**. The grammar of the documents is portable; the CLI and DB layout are TypeScript+SQLite-specific. Sections of the spec that depend on this stack are marked **(reference impl.)**.
+Portability to other stacks (Python, Go) is **not a goal of v0.3**. The grammar of the documents is portable; the CLI/DB/server/UI layers are TypeScript-specific. Sections of the spec that depend on this stack are marked **(reference impl.)**.
+
+## Web UI (v0.3)
+
+The kanban shows a two-tier filter (epic → milestone) above five status columns (`draft / ready_to_dev / claimed / in_progress / done`). Each wave is a card with title, slice progress, assignee, branch, and PR link. Clicking a card opens a modal with the slice list and a "Show raw markdown" toggle. The `Promote` and `Reset to draft` buttons map directly onto the same gate-checked operations the CLI runs.
+
+Agent orchestration (running Claude Code in detached `tmux` sessions, live xterm.js streaming) is **planned but not yet implemented** — it lives as `E002/M003` in the live backlog with full slice detail, ready to be executed under the agent protocol.
 
 ## Sample backlog
 
@@ -143,8 +162,10 @@ The repo's own `backlog/` contains [`E001-foundation-hardening`](backlog/E001-fo
 
 ## Versioning
 
-| Version  | What landed                                                                                              |
-| -------- | -------------------------------------------------------------------------------------------------------- |
-| `v0.1`   | Initial extraction from `hhru`. Three-layer model: Milestone → Wave → Slice.                              |
-| `v0.2`   | **Breaking.** Epic layer added on top. Slash commands. CI. Live backlog. Migration: wrap M001 dirs in E001.|
-| `v0.3`   | Planned: CLI/git decoupling — see [proposal](docs/proposals/cli-vcs-decoupling.md).                      |
+| Version            | What landed                                                                                              |
+| ------------------ | -------------------------------------------------------------------------------------------------------- |
+| `v0.1`             | Initial extraction from `hhru`. Three-layer model: Milestone → Wave → Slice.                              |
+| `v0.2`             | **Breaking.** Epic layer added on top. Slash commands. CI. Live backlog. Migration: wrap M001 dirs in E001.|
+| `v0.3.0-alpha`     | tRPC server + React/MUI kanban (M001+M002 of E002). M003 agent orchestration planned in slices.            |
+| `v0.3.0` *(next)*  | M003 implemented — tmux/node-pty agent spawning + live xterm streaming.                                   |
+| `v0.4` *(planned)* | CLI/git decoupling — see [proposal](docs/proposals/cli-vcs-decoupling.md).                                |
