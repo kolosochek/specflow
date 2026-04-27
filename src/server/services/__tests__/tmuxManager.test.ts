@@ -85,3 +85,109 @@ describe('TmuxManager.list', () => {
     expect(sessions[1].exitCode).toBe(0);
   });
 });
+
+describe('TmuxManager.has', () => {
+  it('returns true when tmux has-session exits 0', () => {
+    // SCENARIO: has() forwards a successful tmux has-session check
+    // INPUT: execFileSync returns normally for `has-session -t <name>`
+    // EXPECTED: true
+    mockedExec.mockReturnValue('');
+    const tmux = new TmuxManager(3);
+    expect(tmux.has('agent-E001-M001-W001')).toBe(true);
+  });
+
+  it('returns false when tmux has-session throws', () => {
+    // SCENARIO: has() swallows non-zero exit and returns false
+    // INPUT: execFileSync throws
+    // EXPECTED: false
+    mockedExec.mockImplementation(() => {
+      throw new Error("can't find session: agent-E001-M001-W001");
+    });
+    const tmux = new TmuxManager(3);
+    expect(tmux.has('agent-E001-M001-W001')).toBe(false);
+  });
+});
+
+describe('TmuxManager.spawn', () => {
+  it('rejects when a session for the same wave is already running', () => {
+    // SCENARIO: spawn refuses to clobber an existing session for the same waveId
+    // INPUT: has() reports the session is already there
+    // EXPECTED: throws Error matching /already running/
+    mockedExec.mockReturnValue(''); // first call is `has-session` → success → has() returns true
+    const tmux = new TmuxManager(3);
+    expect(() => tmux.spawn('E001/M001/W001', 'echo hi', '/tmp')).toThrow(/already running/);
+  });
+
+  it('rejects when at maxSessions concurrent live sessions', () => {
+    // SCENARIO: spawn enforces the SPECFLOW_MAX_AGENTS-equivalent ceiling
+    // INPUT: has() returns false, list() returns 3 live agent sessions, max=3
+    // EXPECTED: throws Error matching /Max 3 agent sessions running/
+    let call = 0;
+    mockedExec.mockImplementation((bin: string, args?: ReadonlyArray<string>) => {
+      call += 1;
+      // 1st invocation: has-session (must throw to make has() return false)
+      if (call === 1 && (args?.[0] === 'has-session')) {
+        throw new Error('no session');
+      }
+      // 2nd invocation: list-sessions (return 3 live agent rows)
+      if (args?.[0] === 'list-sessions') {
+        return [
+          'agent-E001-M001-W001|1|2|0|',
+          'agent-E001-M002-W001|3|4|0|',
+          'agent-E001-M003-W001|5|6|0|',
+        ].join('\n') + '\n';
+      }
+      return '';
+    });
+    const tmux = new TmuxManager(3);
+    expect(() => tmux.spawn('E001/M002/W002', 'echo hi', '/tmp')).toThrow(/Max 3 agent sessions running/);
+  });
+
+  it('returns the session name on a successful spawn', () => {
+    // SCENARIO: spawn happy path — has() false, list() empty, all subsequent tmux calls succeed
+    // INPUT: clean tmux state
+    // EXPECTED: returns 'agent-E001-M001-W001'
+    let call = 0;
+    mockedExec.mockImplementation((bin: string, args?: ReadonlyArray<string>) => {
+      call += 1;
+      if (args?.[0] === 'has-session') throw new Error('no session');
+      if (args?.[0] === 'list-sessions') return '';
+      // every subsequent call (new-session, set-option × 2) returns ''
+      return '';
+    });
+    const tmux = new TmuxManager(3);
+    expect(tmux.spawn('E001/M001/W001', 'echo hi', '/tmp')).toBe('agent-E001-M001-W001');
+  });
+});
+
+describe('TmuxManager.kill / capturePane', () => {
+  it('kill issues kill-session against the right name', () => {
+    // SCENARIO: kill forwards the session name to `tmux kill-session -t <name>`
+    // INPUT: sessionName='agent-E001-M001-W001'
+    // EXPECTED: execFileSync called with the expected argv tail
+    mockedExec.mockReturnValue('');
+    const tmux = new TmuxManager(3);
+    tmux.kill('agent-E001-M001-W001');
+    const lastCall = mockedExec.mock.calls.at(-1);
+    expect(lastCall?.[0]).toBe('tmux');
+    expect(lastCall?.[1]).toEqual(['kill-session', '-t', 'agent-E001-M001-W001']);
+  });
+
+  it('capturePane returns the captured stdout as-is', () => {
+    // SCENARIO: capturePane forwards tmux capture-pane output to the caller
+    // INPUT: mocked exec returns 'pane buffer line\n'
+    // EXPECTED: returns the same string
+    mockedExec.mockReturnValue('pane buffer line\n');
+    const tmux = new TmuxManager(3);
+    expect(tmux.capturePane('agent-E001-M001-W001', 50)).toBe('pane buffer line\n');
+    const lastCall = mockedExec.mock.calls.at(-1);
+    expect(lastCall?.[1]).toEqual([
+      'capture-pane',
+      '-t',
+      'agent-E001-M001-W001',
+      '-p',
+      '-S',
+      '-50',
+    ]);
+  });
+});

@@ -246,3 +246,165 @@ describe('agentRouter.kill', () => {
     }
   });
 });
+
+describe('agentRouter.preflight', () => {
+  it('returns the documented shape with branchName, worktreePath, suggestedCommand', async () => {
+    // SCENARIO: preflight returns all four fs/git fields plus the suggested command
+    // INPUT: a stubbed checkPreFlight + buildAgentCommand
+    // EXPECTED: result contains exactly the documented PreFlight keys plus suggestedCommand
+    const env = createTestEnv();
+    try {
+      const checkPreFlight = vi.fn(() => ({
+        branchExists: true,
+        worktreeExists: false,
+        worktreePath: '/tmp/wt-E001-M001-W001',
+        branchName: 'agent/E001-M001-W001',
+      }));
+      const router = createAgentRouter({
+        getTmux: () => env.fakeTmux,
+        getDb: () => env.db,
+        checkPreFlight,
+        ensureWorktree: env.ensureWorktree,
+        buildAgentCommand: env.buildAgentCommand,
+      });
+      const caller = router.createCaller({});
+
+      const result = await caller.preflight({ waveId: 'E001/M001/W001' });
+
+      expect(result).toEqual({
+        branchExists: true,
+        worktreeExists: false,
+        worktreePath: '/tmp/wt-E001-M001-W001',
+        branchName: 'agent/E001-M001-W001',
+        suggestedCommand: 'claude "Take wave E001/M001/W001."',
+      });
+      expect(checkPreFlight).toHaveBeenCalledWith('E001/M001/W001');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('rejects malformed wave ids at the input boundary', async () => {
+    // SCENARIO: preflight refuses ids that don't match E\d{3}/M\d{3}/W\d{3}
+    // INPUT: 'M001/W001' — legacy 2-level shape
+    // EXPECTED: tRPC throws (Zod validation error) before checkPreFlight is invoked
+    const env = createTestEnv();
+    try {
+      const checkPreFlight = vi.fn(() => ({
+        branchExists: false,
+        worktreeExists: false,
+        worktreePath: '',
+        branchName: '',
+      }));
+      const router = createAgentRouter({
+        getTmux: () => env.fakeTmux,
+        getDb: () => env.db,
+        checkPreFlight,
+        ensureWorktree: env.ensureWorktree,
+        buildAgentCommand: env.buildAgentCommand,
+      });
+      const caller = router.createCaller({});
+
+      await expect(caller.preflight({ waveId: 'M001/W001' })).rejects.toThrow();
+      expect(checkPreFlight).not.toHaveBeenCalled();
+    } finally {
+      env.cleanup();
+    }
+  });
+});
+
+describe('agentRouter.list', () => {
+  it('forwards TmuxManager.list output unchanged', async () => {
+    // SCENARIO: list endpoint is a thin pass-through over the manager
+    // INPUT: tmux.list returns one fake session
+    // EXPECTED: caller.list returns exactly that array
+    const env = createTestEnv();
+    try {
+      const fakeSessions: TmuxSessionInfo[] = [
+        {
+          sessionName: 'agent-E001-M001-W001',
+          waveId: 'E001/M001/W001',
+          createdAt: 1700000000,
+          lastActivity: 1700000020,
+          paneDead: false,
+          exitCode: null,
+        },
+      ];
+      env.fakeTmux.list = vi.fn(() => fakeSessions);
+
+      const router = createAgentRouter({
+        getTmux: () => env.fakeTmux,
+        getDb: () => env.db,
+        ensureWorktree: env.ensureWorktree,
+        buildAgentCommand: env.buildAgentCommand,
+      });
+      const caller = router.createCaller({});
+
+      const result = await caller.list();
+      expect(result).toEqual(fakeSessions);
+      expect(env.fakeTmux.list).toHaveBeenCalledTimes(1);
+    } finally {
+      env.cleanup();
+    }
+  });
+});
+
+describe('agentRouter.spawn — extra transitions', () => {
+  it('on a claimed wave, just sets in_progress (no double-claim)', async () => {
+    // SCENARIO: spawn from `claimed` only flips to in_progress (assignedTo already present)
+    // INPUT: wave starts in 'claimed' with assignedTo='agent'
+    // EXPECTED: tmux.spawn called, wave ends in 'in_progress', assignedTo stays 'agent'
+    const env = createTestEnv();
+    env.db.update(schema.waveState)
+      .set({ status: 'claimed', assignedTo: 'agent', updatedAt: new Date().toISOString() })
+      .where(eq(schema.waveState.waveId, 'E001/M001/W001'))
+      .run();
+    try {
+      env.fakeTmux.spawn = vi.fn(() => 'agent-E001-M001-W001');
+      const router = createAgentRouter({
+        getTmux: () => env.fakeTmux,
+        getDb: () => env.db,
+        ensureWorktree: env.ensureWorktree,
+        buildAgentCommand: env.buildAgentCommand,
+      });
+      const caller = router.createCaller({});
+
+      await caller.spawn({ waveId: 'E001/M001/W001', command: 'foo' });
+
+      const ws = env.getWaveStateRow();
+      expect(ws?.status).toBe('in_progress');
+      expect(ws?.assignedTo).toBe('agent');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('on an in_progress wave, re-spawns without changing state (crash-recovery)', async () => {
+    // SCENARIO: spawn against an already-in_progress wave is allowed (re-attach after crash)
+    // INPUT: wave already in 'in_progress'
+    // EXPECTED: tmux.spawn called; status stays 'in_progress', assignedTo unchanged
+    const env = createTestEnv();
+    env.db.update(schema.waveState)
+      .set({ status: 'in_progress', assignedTo: 'agent', updatedAt: new Date().toISOString() })
+      .where(eq(schema.waveState.waveId, 'E001/M001/W001'))
+      .run();
+    try {
+      env.fakeTmux.spawn = vi.fn(() => 'agent-E001-M001-W001');
+      const router = createAgentRouter({
+        getTmux: () => env.fakeTmux,
+        getDb: () => env.db,
+        ensureWorktree: env.ensureWorktree,
+        buildAgentCommand: env.buildAgentCommand,
+      });
+      const caller = router.createCaller({});
+
+      await caller.spawn({ waveId: 'E001/M001/W001', command: 'foo' });
+
+      const ws = env.getWaveStateRow();
+      expect(ws?.status).toBe('in_progress');
+      expect(env.fakeTmux.spawn).toHaveBeenCalledTimes(1);
+    } finally {
+      env.cleanup();
+    }
+  });
+});
