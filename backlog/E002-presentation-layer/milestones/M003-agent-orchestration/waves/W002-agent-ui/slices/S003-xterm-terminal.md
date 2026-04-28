@@ -1,7 +1,7 @@
 ---
 title: XTermTerminal connected to the WS bridge
-created: 2026-04-27
-status: empty
+created: 2026-04-27T00:00:00.000Z
+status: slice_defined
 ---
 
 ## Context
@@ -39,9 +39,10 @@ The placeholder from W002/S001 becomes a real xterm.js instance wired to the WS 
   - SCENARIO: terminal input sends to WS → INPUT: invoke onData with 'q' → EXPECTED: ws.send called with 'q'
   - SCENARIO: unmount disposes both → INPUT: unmount the component → EXPECTED: terminal.dispose and ws.close both called
   - SCENARIO: WS close with non-1000 schedules reconnect → INPUT: simulate ws.close({ code: 1006 }) → EXPECTED: a new WebSocket constructor call within 1.2 s (advance timers)
+  - SCENARIO: clean WS close with code 1000 does NOT schedule a reconnect → INPUT: simulate ws.close({ code: 1000 }), advance timers by 8s → EXPECTED: no additional WebSocket constructor calls beyond the original mount
 
 ## Acceptance criteria
 
-- 5 test cases pass with mocked WebSocket + jsdom-only terminal (xterm has a `mockTerminal` test mode, or use `vi.mock('@xterm/xterm', …)`).
+- 6 test cases pass with mocked WebSocket + jsdom-only terminal (xterm has a `mockTerminal` test mode, or use `vi.mock('@xterm/xterm', …)`).
 - Manual smoke: spawn an agent, open the drawer row, the terminal renders inline and shows live agent output.
 - Bundle gzip size grows by ≤ 80 KB after this slice (xterm + addon-fit).

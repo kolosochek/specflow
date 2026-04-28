@@ -1,7 +1,7 @@
 ---
 title: AgentDrawer with live session list
-created: 2026-04-27
-status: empty
+created: 2026-04-27T00:00:00.000Z
+status: slice_defined
 ---
 
 ## Context
@@ -38,8 +38,10 @@ The drawer is the always-visible registry of running agents. Inspired by `hhru/s
   - SCENARIO: 2 sessions render 2 rows → INPUT: list returns 2 TmuxSessionInfo objects → EXPECTED: 2 table rows, each with wave id text
   - SCENARIO: kill triggers mutation + confirmation → INPUT: click kill, confirm dialog → EXPECTED: agent.kill called once with sessionName
   - SCENARIO: expand row shows terminal placeholder → INPUT: click open-terminal toggle → EXPECTED: XTermTerminalPlaceholder mounted with correct sessionName prop
+  - SCENARIO: kill button shows a confirmation dialog before invoking mutation → INPUT: click kill, then click "Cancel" in the confirmation dialog → EXPECTED: `agent.kill` mutation NOT invoked
+  - SCENARIO: list query is configured to refetch every 3 seconds → INPUT: inspect the query options passed to `useQuery` → EXPECTED: `refetchInterval` equals 3000
 
 ## Acceptance criteria
 
-- 4 test cases pass with mocked tRPC.
+- 6 test cases pass with mocked tRPC.
 - Manual smoke: open `/`, drawer is visible, shows "0 agents". (Cannot test populated state until S002 and S003 land — that is the integration test in W002/S003.)

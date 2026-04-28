@@ -1,7 +1,7 @@
 ---
 title: CommandEditor dialog with preflight and spawn
-created: 2026-04-27
-status: empty
+created: 2026-04-27T00:00:00.000Z
+status: slice_defined
 ---
 
 ## Context
@@ -36,8 +36,9 @@ Spawning an agent is irreversible enough that we want a confirmation step that s
   - SCENARIO: edited command flows to spawn → INPUT: user appends ' --custom-flag', clicks Run → EXPECTED: agent.spawn called with command including '--custom-flag'
   - SCENARIO: spawn error renders inline → INPUT: spawn rejects with 'Max 3 agent sessions running' → EXPECTED: Alert visible with that text, dialog still open
   - SCENARIO: spawn success closes dialog → INPUT: spawn resolves with sessionName → EXPECTED: onClose called once
+  - SCENARIO: Cancel button just closes the dialog without invoking spawn → INPUT: click Cancel → EXPECTED: onClose called once, agent.spawn never invoked
 
 ## Acceptance criteria
 
-- 4 test cases pass.
+- 5 test cases pass.
 - Manual smoke: from a `ready_to_dev` wave, click the Run agent button, dialog opens with preflight + command, click Run, dialog closes, drawer shows the new session.
