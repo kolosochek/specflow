@@ -10,6 +10,15 @@ export default defineConfig({
     nav: [
       { text: 'Why', link: '/why' },
       { text: 'Quick start', link: '/quick-start' },
+      { text: 'Concepts', link: '/concepts/axioms' },
+    ],
+    sidebar: [
+      {
+        text: 'Concepts',
+        items: [
+          { text: 'The four axioms', link: '/concepts/axioms' },
+        ],
+      },
     ],
   },
 });
