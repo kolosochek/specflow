@@ -251,3 +251,42 @@ export async function validateAndFixAction(deps: BaseDeps): Promise<ValidateAndF
 
   return { errors, fixed, fixedFiles };
 }
+
+export async function markDoneAction(
+  deps: BaseDeps & { id: string; reason: string },
+): Promise<CreateResult> {
+  const { vcs, backlogDir, id, reason } = deps;
+  const parts = id.split('/');
+  if (parts.length === 3 || parts.length === 4) {
+    throw new Error(
+      `wave-level manual override is not supported — use 'ticket done <wave-id> --branch <b> --pr <url>' to close a wave. id was '${id}'.`,
+    );
+  }
+  if (parts.length !== 1 && parts.length !== 2) {
+    throw new Error(`malformed id: '${id}' — expected 'E001' or 'E001/M001'.`);
+  }
+
+  let filePath: string;
+  if (parts.length === 1) {
+    const eDir = epicDir(backlogDir, parts[0]);
+    if (!eDir) throw new Error(`Epic ${id} not found`);
+    filePath = join(eDir, 'epic.md');
+  } else {
+    const mDir = milestoneDir(backlogDir, parts[0], parts[1]);
+    if (!mDir) throw new Error(`Milestone ${id} not found`);
+    filePath = join(mDir, 'milestone.md');
+  }
+
+  const content = readFileSync(filePath, 'utf-8');
+  const parsed = matter(content);
+  const data: Record<string, unknown> = {
+    ...parsed.data,
+    manual_status: 'done',
+    manual_done_reason: reason,
+  };
+  writeFileSync(filePath, matter.stringify(parsed.content, data));
+
+  await vcs.stage([filePath]);
+  await vcs.commit(`[backlog] ${id}: mark-done — ${reason}`);
+  return { id, paths: [filePath] };
+}
