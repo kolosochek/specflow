@@ -5,7 +5,7 @@ A working specflow install with one full Epic → Wave → Slice cycle, in under
 ## 1. Install
 
 ```bash
-npm install --save-dev specflow
+npm install --save-dev @dkolosovsky/specflow
 npx specflow init
 # → Creates backlog/ + backlog/templates/{epic,milestone,wave,slice}.md
 ```

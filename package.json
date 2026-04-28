@@ -1,5 +1,5 @@
 {
-  "name": "specflow",
+  "name": "@dkolosovsky/specflow",
   "version": "0.3.0-alpha",
   "description": "A microframework for spec-driven development. Epic → Milestone → Wave → Slice with strict TDD execution.",
   "type": "module",

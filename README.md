@@ -11,10 +11,12 @@
 ## Install
 
 ```bash
-npm install --save-dev specflow
+npm install --save-dev @dkolosovsky/specflow
 npx specflow init
 # → backlog/ + backlog/templates/{epic,milestone,wave,slice}.md created
 ```
+
+> The npm name is scoped (`@dkolosovsky/specflow`) because the unscoped `specflow` was rejected by the registry as too similar to the unrelated `spec-flow` package. The CLI binary is still `specflow`.
 
 Then drive the lifecycle:
 
