@@ -1,7 +1,11 @@
 ---
 title: React kanban (Vite + MUI)
-created: 2026-04-27
+created: 2026-04-27T00:00:00.000Z
 status: empty
+manual_status: done
+manual_done_reason: >-
+  React + MUI kanban shipped in v0.3.0-alpha bundle commit c9c540d, before
+  specflow could describe it as waves
 ---
 
 ## Goal
