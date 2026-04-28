@@ -21,6 +21,14 @@ export default defineConfig({
           { text: 'Agent protocol', link: '/concepts/agent-protocol' },
         ],
       },
+      {
+        text: 'Benefits',
+        items: [
+          { text: 'TDD discipline', link: '/benefits/tdd-discipline' },
+          { text: 'Transparency', link: '/benefits/transparency' },
+          { text: 'Dogfood numbers', link: '/benefits/dogfood-numbers' },
+        ],
+      },
     ],
   },
 });

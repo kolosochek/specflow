@@ -24,7 +24,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "docs:dev": "vitepress dev docs-site",
-    "docs:build": "vitepress build docs-site"
+    "docs:stats": "tsx scripts/site-stats.ts --write",
+    "docs:build": "npm run docs:stats && vitepress build docs-site"
   },
   "dependencies": {
     "@emotion/react": "^11",
