@@ -25,6 +25,7 @@ export default defineConfig({
         text: 'Benefits',
         items: [
           { text: 'TDD discipline', link: '/benefits/tdd-discipline' },
+          { text: 'Transparency', link: '/benefits/transparency' },
         ],
       },
     ],
