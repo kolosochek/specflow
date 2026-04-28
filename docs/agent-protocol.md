@@ -39,14 +39,14 @@ After step ⑦ the agent works inside the worktree, but `ticket` invocations con
 
 ## 2 — Resuming a previously started ticket
 
-When instructed to resume `M001/W001`:
+When instructed to resume `E001/M001/W001`:
 
 | Step | Action |
 | ---- | ------ |
-| ① | `ticket show M001/W001`, verify status is `claimed` or `in_progress` |
+| ① | `ticket show E001/M001/W001`, verify status is `claimed` or `in_progress` |
 | ② | `git worktree list` — does the worktree exist? |
-| ③ | If worktree exists → use it. If branch exists but worktree doesn't → `git worktree add … agent/M001-W001` (no `-b`). If neither exists → inform the human, suggest `ticket reset` and a fresh start. |
-| ④ | If status is `claimed`, run `ticket status M001/W001 in_progress` |
+| ③ | If worktree exists → use it. If branch exists but worktree doesn't → `git worktree add … agent/E001-M001-W001` (no `-b`). If neither exists → inform the human, suggest `ticket reset` and a fresh start. |
+| ④ | If status is `claimed`, run `ticket status E001/M001/W001 in_progress` |
 | ⑤ | `cd` into the worktree |
 | ⑥ | Skip slices already marked `done`, resume from the first non-done slice |
 
@@ -66,10 +66,10 @@ flowchart TD
     E -- "no (pass before impl)" --> STOP1["STOP — report to human"]
     F --> G["7. Run 'Run:' command again"]
     G --> H{Tests GREEN?}
-    H -- yes --> I["9. Commit '[M/W/S] description'"]
+    H -- yes --> I["9. Commit '[E/M/W/S] description'"]
     H -- "no" --> J["Fix implementation<br/>(NEVER weaken tests)"]
     J --> G
-    I --> K["10. ticket slice-done M/W/S"]
+    I --> K["10. ticket slice-done E/M/W/S"]
     K --> L["11. Proceed to next slice"]
 ```
 
@@ -124,12 +124,12 @@ After all slices are `done`:
 
 | Step | Action |
 | ---- | ------ |
-| ① | `ticket show M001/W001` — verify every slice has execution status `done` |
+| ① | `ticket show E001/M001/W001` — verify every slice has execution status `done` |
 | ② | Run the **union** of all `Run:` commands across the wave's slices (full test set for the wave) |
 | ③ | All tests must pass. If a fix is needed, the **whole-wave Scope union** applies — any file mentioned in any slice's Scope may be edited. |
-| ④ | `git push -u origin agent/M001-W001` |
-| ⑤ | Open PR with title `M001/W001: <wave title>` and a body containing per-slice summary, decisions made, issues encountered |
-| ⑥ | `ticket done M001/W001 --branch agent/M001-W001 --pr <PR url>` |
+| ④ | `git push -u origin agent/E001-M001-W001` |
+| ⑤ | Open PR with title `E001/M001/W001: <wave title>` and a body containing per-slice summary, decisions made, issues encountered |
+| ⑥ | `ticket done E001/M001/W001 --branch agent/E001-M001-W001 --pr <PR url>` |
 
 > 💡 **Why widen scope at finish.** Step ③ deliberately relaxes the per-slice scope rule so that integration fixes (e.g. an import that needs re-exporting in a file not listed in any single slice) don't require an out-of-band slice. The union is bounded; arbitrary edits are still forbidden.
 

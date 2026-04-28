@@ -41,9 +41,10 @@ The `ticket` CLI is the **single legal mutator** of runtime state. Every command
 **Reads.** Walks the DB and prints a tree:
 
 ```
-M001 Stabilization milestone [active]
-  ├─ M001/W001 Resume vacancy data model  wave_defined (2/2 defined)  done (alice)  2/2 slices
-  └─ M001/W002 Pipeline operations atomicity  wave_defined (3/3 defined)  in_progress (bob)  1/3 slices
+E001 Platform redesign [active]
+  E001/M001 Stabilization milestone [active]
+    └─ E001/M001/W001 Resume vacancy data model  wave_defined (2/2 defined)  done (alice)  2/2 slices
+    └─ E001/M001/W002 Pipeline operations atomicity  wave_defined (3/3 defined)  in_progress (bob)  1/3 slices
 ```
 
 `--status <s>` filters waves by execution status (e.g. `--status ready_to_dev`).
@@ -55,32 +56,33 @@ M001 Stabilization milestone [active]
 **Reads.** Runs `targetedSync` first (refreshes definitions for that wave's milestone), then prints:
 
 ```
-Wave: M001/W002 — Pipeline operations atomicity
+Wave: E001/M001/W002 — Pipeline operations atomicity
 Status: in_progress
 Content: wave_defined
 Assigned: bob
-Branch: agent/M001-W002
+Branch: agent/E001-M001-W002
 PR: —
 
 Slices:
-  ✓ M001/W002/S001 Atomic score [slice_defined] [done]
-  ✓ M001/W002/S002 Atomic cover letter [slice_defined] [done]
-  □ M001/W002/S003 Atomic apply [slice_defined]
+  ✓ E001/M001/W002/S001 Atomic score [slice_defined] [done]
+  ✓ E001/M001/W002/S002 Atomic cover letter [slice_defined] [done]
+  □ E001/M001/W002/S003 Atomic apply [slice_defined]
 ```
 
 ---
 
-### `create milestone "<title>"` / `wave …` / `slice …`
+### `create epic "<title>"` / `milestone …` / `wave …` / `slice …`
 
 **Creates a file** from `templates/<type>.md`, replaces `title:` and `created:`, runs `git add` + `git commit`, then `fullSync`.
 
-| Form                                       | Effect                                                              |
-| ------------------------------------------ | ------------------------------------------------------------------- |
-| `create milestone "<title>"`               | Scaffolds `backlog/M\d{3}-<slug>/milestone.md` with `waves/` subdir |
-| `create wave <M> "<title>"`                | Scaffolds `backlog/<M-dir>/waves/W\d{3}-<slug>/wave.md` with `slices/` subdir |
-| `create slice <M>/<W> "<title>"`           | Scaffolds `backlog/<M-dir>/waves/<W-dir>/slices/S\d{3}-<slug>.md`  |
+| Form                                                  | Effect                                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `create epic "<title>"`                               | Scaffolds `backlog/E\d{3}-<slug>/epic.md` with `milestones/` subdir             |
+| `create milestone <E> "<title>"`                      | Scaffolds `backlog/<E-dir>/milestones/M\d{3}-<slug>/milestone.md` with `waves/` subdir |
+| `create wave <E>/<M> "<title>"`                       | Scaffolds `backlog/<E-dir>/milestones/<M-dir>/waves/W\d{3}-<slug>/wave.md` with `slices/` subdir |
+| `create slice <E>/<M>/<W> "<title>"`                  | Scaffolds `backlog/<E-dir>/milestones/<M-dir>/waves/<W-dir>/slices/S\d{3}-<slug>.md` |
 
-The next number is computed by scanning the parent directory for existing `[MWS]\d{3}-` prefixes. Slug is `lower-kebab-case` of the title.
+The next number is computed by scanning the parent directory for existing `[EMWS]\d{3}-` prefixes. Slug is `lower-kebab-case` of the title.
 
 > ⚠️ **Side effects.** Each `create` makes a git commit `[backlog] create <id>: <title>`. This is intentional — every spec authoring step is auditable in git history.
 
@@ -184,8 +186,8 @@ On success: wave transitions to `done` with `branch` and `pr` persisted in `wave
 Prints cleanup hints for the worktree and branch but **does not** delete them — that's the operator's call.
 
 ```text
-⚠ Worktree may still exist. Run: git worktree remove ../<project>-agent-M003-W002
-⚠ Branch may still exist. Run: git branch -D agent/M003-W002
+⚠ Worktree may still exist. Run: git worktree remove ../<project>-agent-E001-M003-W002
+⚠ Branch may still exist. Run: git branch -D agent/E001-M003-W002
 ```
 
 ---
