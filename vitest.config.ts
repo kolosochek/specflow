@@ -8,5 +8,9 @@ export default defineConfig({
     // assertions. Serializing test files trades a small runtime cost for
     // determinism — acceptable for a project this size.
     fileParallelism: false,
+    // Client tests (React components) need a DOM environment.
+    environmentMatchGlobs: [
+      ['src/client/**', 'jsdom'],
+    ],
   },
 });

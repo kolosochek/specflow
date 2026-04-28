@@ -16,6 +16,9 @@ import {
   Divider,
 } from '@mui/material';
 import { trpc } from '../../trpc.js';
+import { CommandEditor } from '../agent/CommandEditor.js';
+
+const RUN_AGENT_STATES = new Set(['ready_to_dev', 'claimed', 'in_progress']);
 
 const SLICE_STATUS_ICON: Record<string, string> = {
   done: '✓',
@@ -41,6 +44,7 @@ export function WaveDetailModal({
   );
 
   const [actionError, setActionError] = useState<string | null>(null);
+  const [commandEditorOpen, setCommandEditorOpen] = useState(false);
 
   const promoteMutation = trpc.backlog.promote.useMutation({
     onSuccess: (result) => {
@@ -208,9 +212,24 @@ export function WaveDetailModal({
           >
             Reset to draft
           </Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={() => setCommandEditorOpen(true)}
+            disabled={!detail || !RUN_AGENT_STATES.has(detail.status)}
+          >
+            Run agent
+          </Button>
         </Stack>
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
+      {commandEditorOpen && (
+        <CommandEditor
+          waveId={waveId}
+          open={commandEditorOpen}
+          onClose={() => setCommandEditorOpen(false)}
+        />
+      )}
     </Dialog>
   );
 }
