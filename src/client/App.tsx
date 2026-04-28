@@ -5,6 +5,7 @@ import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { trpc } from './trpc.js';
 import { BacklogPage } from './pages/BacklogPage.js';
+import { AgentDrawer } from './components/agent/AgentDrawer.js';
 
 const theme = createTheme({
   palette: {
@@ -47,6 +48,7 @@ export function App() {
               <Route path="/" element={<BacklogPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            <AgentDrawer />
           </BrowserRouter>
         </ThemeProvider>
       </QueryClientProvider>
