@@ -1,6 +1,6 @@
 # specflow
 
-Spec-driven development with TDD discipline. Markdown is the source of truth; the CLI is the only legal mutator of runtime state; every slice is a test-first commit.
+Markdown is the source of truth. The CLI is the only legal mutator of runtime state. Every slice is one TDD-disciplined commit. specflow is a microframework for spec-driven development that asks the author to spend more time upfront so the reviewer, the next agent, and your future self spend less time decoding.
 
 ![specflow](/specflow-logo.svg)
 
@@ -11,4 +11,4 @@ flowchart LR
     Wave --> Slice
 ```
 
-[Why specflow](./why)
+[See what changes](/why) · [Try it in 5 minutes](/quick-start)
