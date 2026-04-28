@@ -8,6 +8,12 @@ import {
   deriveMilestoneStatus, deriveEpicStatus,
 } from '../src/backlog/state.js';
 import { classifyFile } from '../src/backlog/parser.js';
+import {
+  epicFrontmatter,
+  milestoneFrontmatter,
+  waveFrontmatter,
+  sliceFrontmatter,
+} from '../src/backlog/frontmatter.js';
 import { checkEpic, checkMilestone, checkWave, checkSlice } from '../src/backlog/checklist.js';
 import { selectVcs } from '../src/backlog/vcs-select.js';
 import {
@@ -19,7 +25,6 @@ import {
 } from '../src/backlog/cli-actions.js';
 import { eq } from 'drizzle-orm';
 import matter from 'gray-matter';
-import { z } from 'zod';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '..');
 const BACKLOG_DIR = join(PROJECT_ROOT, 'backlog');
@@ -378,11 +383,12 @@ async function cmdValidate() {
     .map(f => join(BACKLOG_DIR, f));
   let errors = 0;
 
-  const yamlDate = z.union([z.string(), z.date()]);
-  const epicFm = z.object({ title: z.string(), created: yamlDate, status: z.string().optional() });
-  const milestoneFm = z.object({ title: z.string(), created: yamlDate, status: z.string().optional() });
-  const waveFm = z.object({ title: z.string(), created: yamlDate, status: z.string().optional() });
-  const sliceFm = z.object({ title: z.string(), created: yamlDate.optional(), status: z.string().optional() });
+  const schemaMap = {
+    epic: epicFrontmatter,
+    milestone: milestoneFrontmatter,
+    wave: waveFrontmatter,
+    slice: sliceFrontmatter,
+  };
 
   for (const file of files) {
     const relPath = 'backlog/' + file.slice(BACKLOG_DIR.length + 1);
@@ -391,7 +397,7 @@ async function cmdValidate() {
 
     const content = readFileSync(file, 'utf-8');
     const { data } = matter(content);
-    const schemaMap = { epic: epicFm, milestone: milestoneFm, wave: waveFm, slice: sliceFm };
+
     const result = schemaMap[type].safeParse(data);
     if (!result.success) {
       console.error(`❌ ${relPath}: ${result.error.issues.map(i => i.message).join(', ')}`);

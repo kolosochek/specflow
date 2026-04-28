@@ -128,7 +128,7 @@ The CLI runs **5 mechanical checks** before accepting a milestone as `milestone_
 
 - The `## Goal` is usually a paragraph, not bullets — it explains the **why**, not the what.
 - `## Success criteria` items tend to be **observable**, not procedural ("X is visible in the UI", not "X is implemented").
-- Some milestones add domain-specific extra sections (e.g. `## Verification policy` in `M005`). The checklist allows extra sections; only the required ones are validated.
+- Some milestones add domain-specific extra sections (e.g. `## Verification policy`, observed in the `hhru` reference project's `M005`). The checklist allows extra sections; only the required ones are validated.
 
 ---
 
@@ -191,7 +191,7 @@ These appear in real waves and are useful, but the checklist does not enforce th
 
 - `## Slice dependency order` — a Mermaid graph showing which slices are parallelizable.
 - `## Platform resolution strategy` — a section spelling out a design decision the wave depends on.
-- A frontmatter field `milestone_criteria: [1, 2, 3]` cross-referencing milestone success criteria. (Used in `M004/W002`; not yet in the schema.)
+- A frontmatter field `milestone_criteria: [1, 2, 3]` cross-referencing milestone success criteria. (Observed in the `hhru` reference project; not yet in the schema.)
 
 ---
 

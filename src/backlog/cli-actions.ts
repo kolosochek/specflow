@@ -2,8 +2,13 @@ import { execSync } from 'child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, globSync } from 'fs';
 import { join } from 'path';
 import matter from 'gray-matter';
-import { z } from 'zod';
 import { classifyFile } from './parser.js';
+import {
+  epicFrontmatter,
+  milestoneFrontmatter,
+  waveFrontmatter,
+  sliceFrontmatter,
+} from './frontmatter.js';
 import type { VcsAdapter } from './vcs.js';
 import { commitMessageFor } from './commits.js';
 
@@ -190,11 +195,12 @@ export async function validateAndFixAction(deps: BaseDeps): Promise<ValidateAndF
   let fixed = 0;
   const fixedFiles: string[] = [];
 
-  const yamlDate = z.union([z.string(), z.date()]);
-  const epicFm = z.object({ title: z.string(), created: yamlDate, status: z.string().optional() });
-  const milestoneFm = z.object({ title: z.string(), created: yamlDate, status: z.string().optional() });
-  const waveFm = z.object({ title: z.string(), created: yamlDate, status: z.string().optional() });
-  const sliceFm = z.object({ title: z.string(), created: yamlDate.optional(), status: z.string().optional() });
+  const schemaMap = {
+    epic: epicFrontmatter,
+    milestone: milestoneFrontmatter,
+    wave: waveFrontmatter,
+    slice: sliceFrontmatter,
+  };
 
   for (const file of files) {
     const relPath = 'backlog/' + file.slice(backlogDir.length + 1);
@@ -206,7 +212,6 @@ export async function validateAndFixAction(deps: BaseDeps): Promise<ValidateAndF
     // gray-matter caches the parsed result by content string; clone the data
     // so we never mutate the shared cache entry across files / test runs.
     const data: Record<string, unknown> = { ...parsed.data };
-    const schemaMap = { epic: epicFm, milestone: milestoneFm, wave: waveFm, slice: sliceFm };
     const result = schemaMap[type].safeParse(data);
     if (!result.success) {
       console.error(`❌ ${relPath}: ${result.error.issues.map((i) => i.message).join(', ')}`);

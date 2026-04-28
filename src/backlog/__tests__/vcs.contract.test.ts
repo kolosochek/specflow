@@ -108,4 +108,37 @@ describe('NullAdapter-specific contract', () => {
     await expect(adapter.openWorktree('agent/x', probeDir)).resolves.toBeUndefined();
     expect(existsSync(probeDir)).toBe(false);
   });
+
+  it('removeWorktree resolves on a non-existent path without throwing', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: NullAdapter.removeWorktree is a total no-op even on bogus input
+    // INPUT: NullAdapter, dir '/tmp/never-existed-XYZ-<timestamp>'
+    // EXPECTED: resolves; the path stays absent
+    const adapter = new NullAdapter();
+    const probeDir = join(tmpdir(), `null-rmwt-${Date.now()}`);
+    await expect(adapter.removeWorktree(probeDir)).resolves.toBeUndefined();
+    expect(existsSync(probeDir)).toBe(false);
+  });
+
+  it('commit with signoff option resolves as a no-op', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: NullAdapter.commit honours the signoff option signature without doing anything
+    // INPUT: NullAdapter, message 'x', { signoff: true }
+    // EXPECTED: resolves; no side effects (nothing to assert beyond resolution)
+    const adapter = new NullAdapter();
+    await expect(adapter.commit('x', { signoff: true })).resolves.toBeUndefined();
+  });
+
+  it('full lifecycle sequence (stage → commit → openWorktree → removeWorktree) resolves', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: NullAdapter satisfies the whole interface in sequence
+    // INPUT: stage → commit → openWorktree → removeWorktree, all awaited in order
+    // EXPECTED: every promise resolves; no exceptions throughout the chain
+    const adapter = new NullAdapter();
+    await adapter.stage(['anything', 'goes']);
+    await adapter.commit('msg', { signoff: false });
+    await adapter.openWorktree('branch/x', join(tmpdir(), 'never-created'));
+    await adapter.removeWorktree(join(tmpdir(), 'never-created'));
+    expect(true).toBe(true);
+  });
 });

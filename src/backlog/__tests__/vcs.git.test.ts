@@ -194,4 +194,125 @@ describe('GitAdapter', () => {
     expect(worktrees).not.toContain(wtDir);
     expect(existsSync(wtDir)).toBe(false);
   });
+
+  it('commit with signoff option appends Signed-off-by trailer', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: commit with the signoff option appends a Signed-off-by trailer
+    // INPUT: stage a file, then commit with { signoff: true }
+    // EXPECTED: git log -1 --format=%B contains 'Signed-off-by: Test User <test@example.com>'
+    writeFileSync(join(repo.dir, 'so.txt'), 'so');
+    const adapter = new GitAdapter({ cwd: repo.dir });
+    await adapter.stage(['so.txt']);
+    await adapter.commit('feat: signed', { signoff: true });
+
+    const body = execFileSync('git', ['log', '-1', '--format=%B'], {
+      cwd: repo.dir,
+      encoding: 'utf-8',
+    });
+    expect(body).toContain('Signed-off-by: Test User <test@example.com>');
+  });
+
+  it('stage handles multiple paths in a single call', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: stage accepts an array with several files and stages them all atomically
+    // INPUT: three files written to disk; one stage call with all three paths
+    // EXPECTED: git diff --cached --name-only lists exactly those three files (sorted)
+    writeFileSync(join(repo.dir, 'a.txt'), 'a');
+    writeFileSync(join(repo.dir, 'b.txt'), 'b');
+    writeFileSync(join(repo.dir, 'c.txt'), 'c');
+    const adapter = new GitAdapter({ cwd: repo.dir });
+    await adapter.stage(['a.txt', 'b.txt', 'c.txt']);
+
+    const staged = execFileSync('git', ['diff', '--cached', '--name-only'], {
+      cwd: repo.dir,
+      encoding: 'utf-8',
+    })
+      .trim()
+      .split('\n')
+      .sort();
+    expect(staged).toEqual(['a.txt', 'b.txt', 'c.txt']);
+  });
+
+  it('stage rejects with stderr when a path does not exist', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: stage propagates git's pathspec error when the file is missing
+    // INPUT: stage(['does-not-exist.txt']) on a clean repo
+    // EXPECTED: promise rejects with an Error whose message contains 'pathspec' or 'did not match'
+    const adapter = new GitAdapter({ cwd: repo.dir });
+    let caught: unknown = null;
+    try {
+      await adapter.stage(['does-not-exist.txt']);
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/pathspec|did not match/);
+  });
+
+  it('openWorktree to an already-occupied directory rejects with stderr', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: openWorktree fails when the target directory already contains files
+    // INPUT: tmp dir pre-populated with a regular file; openWorktree('feature/x', dir)
+    // EXPECTED: promise rejects with an Error mentioning 'already exists' or 'not empty'
+    writeFileSync(join(repo.dir, 'seed.txt'), 's');
+    execFileSync('git', ['add', 'seed.txt'], { cwd: repo.dir });
+    execFileSync('git', ['commit', '-m', 'seed'], { cwd: repo.dir });
+
+    const occupied = mkdtempSync(join(tmpdir(), 'vcs-occupied-'));
+    extraDirs.push(occupied);
+    writeFileSync(join(occupied, 'preexisting.txt'), 'block');
+    const adapter = new GitAdapter({ cwd: repo.dir });
+
+    let caught: unknown = null;
+    try {
+      await adapter.openWorktree('feature/blocked', occupied);
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/already exists|not empty|exists and is not empty/i);
+  });
+
+  it('removeWorktree on a path that is not a registered worktree rejects', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: removeWorktree errors when the path is not in `git worktree list`
+    // INPUT: a tmp dir that was never added as a worktree
+    // EXPECTED: promise rejects with an Error mentioning 'not a working tree' or similar
+    writeFileSync(join(repo.dir, 'seed.txt'), 's');
+    execFileSync('git', ['add', 'seed.txt'], { cwd: repo.dir });
+    execFileSync('git', ['commit', '-m', 'seed'], { cwd: repo.dir });
+    const phantom = mkdtempSync(join(tmpdir(), 'vcs-phantom-'));
+    extraDirs.push(phantom);
+
+    const adapter = new GitAdapter({ cwd: repo.dir });
+
+    let caught: unknown = null;
+    try {
+      await adapter.removeWorktree(phantom);
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/not a working tree|is not a working tree|not a worktree/i);
+  });
+
+  it('error from a wrapped git command includes the command in the error message', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: runGit's error wrapper prefixes with 'git <args> failed:' so the failing command is visible
+    // INPUT: trigger a known failure (commit on a clean repo with nothing staged)
+    // EXPECTED: caught error message starts with 'git commit -m '
+    writeFileSync(join(repo.dir, 'seed.txt'), 's');
+    execFileSync('git', ['add', 'seed.txt'], { cwd: repo.dir });
+    execFileSync('git', ['commit', '-m', 'seed'], { cwd: repo.dir });
+    const adapter = new GitAdapter({ cwd: repo.dir });
+
+    let caught: unknown = null;
+    try {
+      await adapter.commit('nope');
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/^git commit -m /);
+  });
 });
