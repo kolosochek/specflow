@@ -120,6 +120,8 @@ Strategic theme here.
       path: EPIC_PATH,
       created: '2026-04-27',
       status: 'empty',
+      manualStatus: null,
+      manualDoneReason: null,
     });
   });
 
@@ -174,6 +176,8 @@ Strategic goal here.
       path: MILESTONE_PATH,
       created: '2026-04-10',
       status: 'empty',
+      manualStatus: null,
+      manualDoneReason: null,
     });
   });
 

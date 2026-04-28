@@ -50,7 +50,14 @@ export function fullSync(db: BacklogDb, backlogDir: string): void {
       .values(e)
       .onConflictDoUpdate({
         target: schema.epics.id,
-        set: { title: e.title, path: e.path, created: e.created, status: e.status },
+        set: {
+          title: e.title,
+          path: e.path,
+          created: e.created,
+          status: e.status,
+          manualStatus: e.manualStatus,
+          manualDoneReason: e.manualDoneReason,
+        },
       })
       .run();
   }
@@ -65,6 +72,8 @@ export function fullSync(db: BacklogDb, backlogDir: string): void {
           path: m.path,
           created: m.created,
           status: m.status,
+          manualStatus: m.manualStatus,
+          manualDoneReason: m.manualDoneReason,
         },
       })
       .run();
@@ -175,6 +184,8 @@ export function incrementalSyncFile(db: BacklogDb, backlogDir: string, absPath: 
           path: parsed.path,
           created: parsed.created,
           status: parsed.status,
+          manualStatus: parsed.manualStatus,
+          manualDoneReason: parsed.manualDoneReason,
         },
       })
       .run();
@@ -191,6 +202,8 @@ export function incrementalSyncFile(db: BacklogDb, backlogDir: string, absPath: 
           path: parsed.path,
           created: parsed.created,
           status: parsed.status,
+          manualStatus: parsed.manualStatus,
+          manualDoneReason: parsed.manualDoneReason,
         },
       })
       .run();
@@ -297,6 +310,8 @@ export function targetedSync(db: BacklogDb, backlogDir: string, waveId: string):
             path: parsed.path,
             created: parsed.created,
             status: parsed.status,
+            manualStatus: parsed.manualStatus,
+            manualDoneReason: parsed.manualDoneReason,
           },
         })
         .run();
@@ -313,6 +328,8 @@ export function targetedSync(db: BacklogDb, backlogDir: string, waveId: string):
             path: parsed.path,
             created: parsed.created,
             status: parsed.status,
+            manualStatus: parsed.manualStatus,
+            manualDoneReason: parsed.manualDoneReason,
           },
         })
         .run();

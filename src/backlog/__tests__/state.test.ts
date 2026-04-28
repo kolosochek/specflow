@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { eq } from 'drizzle-orm';
@@ -15,6 +15,7 @@ import {
   deriveEpicStatus,
   getWaveDetail,
 } from '../state.js';
+import { fullSync } from '../sync.js';
 
 function createTestDb() {
   const tempDir = mkdtempSync(join(tmpdir(), 'state-test-'));
@@ -663,6 +664,123 @@ describe('getWaveDetail', () => {
       const detail = getWaveDetail(env.db, 'NONEXISTENT');
 
       expect(detail).toBeNull();
+    } finally {
+      env.cleanup();
+    }
+  });
+});
+
+describe('derive functions — manual_status override (E001/M004/W001/S001)', () => {
+  function setManualStatus(env: ReturnType<typeof createTestDb>, table: 'epics' | 'milestones', id: string) {
+    if (table === 'epics') {
+      env.db.update(schema.epics)
+        .set({ manualStatus: 'done', manualDoneReason: 'shipped externally' })
+        .where(eq(schema.epics.id, id))
+        .run();
+    } else {
+      env.db.update(schema.milestones)
+        .set({ manualStatus: 'done', manualDoneReason: 'shipped externally' })
+        .where(eq(schema.milestones.id, id))
+        .run();
+    }
+  }
+
+  it('deriveMilestoneStatus returns done when manual override is set even with zero waves', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: milestone with manual override + zero waves
+    // INPUT: seed epic+milestone, set manualStatus='done' on milestone, no waves
+    // EXPECTED: deriveMilestoneStatus returns 'done'
+    const env = createTestDb();
+    try {
+      env.seedEpic('E001');
+      env.seedMilestone('E001/M001', 'E001');
+      setManualStatus(env, 'milestones', 'E001/M001');
+      expect(deriveMilestoneStatus(env.db, 'E001/M001')).toBe('done');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('deriveMilestoneStatus returns done when manual override is set even with a draft wave', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: manual override beats wave-aggregation
+    // INPUT: milestone with one draft wave, manualStatus='done'
+    // EXPECTED: 'done'
+    const env = createTestDb();
+    try {
+      env.seedEpic('E001');
+      env.seedMilestone('E001/M001', 'E001');
+      env.seedWave('E001/M001/W001', 'E001/M001');
+      setManualStatus(env, 'milestones', 'E001/M001');
+      expect(deriveMilestoneStatus(env.db, 'E001/M001')).toBe('done');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('deriveEpicStatus returns done when manual override is set even with no milestones', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: epic with manual override + no children
+    // INPUT: seed epic only, set manualStatus='done'
+    // EXPECTED: 'done'
+    const env = createTestDb();
+    try {
+      env.seedEpic('E001');
+      setManualStatus(env, 'epics', 'E001');
+      expect(deriveEpicStatus(env.db, 'E001')).toBe('done');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('deriveMilestoneStatus without manual override behaves as before', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: regression — no manual override, only draft waves
+    // INPUT: milestone with one draft wave, no manual_status
+    // EXPECTED: 'draft'
+    const env = createTestDb();
+    try {
+      env.seedEpic('E001');
+      env.seedMilestone('E001/M001', 'E001');
+      env.seedWave('E001/M001/W001', 'E001/M001');
+      expect(deriveMilestoneStatus(env.db, 'E001/M001')).toBe('draft');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('fullSync propagates manual_status from MD into the milestone row', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: round-trip — MD frontmatter manual_status reaches the DB
+    // INPUT: tmp backlog with epic.md + milestone.md (manual_status:done), run fullSync
+    // EXPECTED: db milestone row has manualStatus === 'done'
+    const env = createTestDb();
+    try {
+      // Build a tmp backlog tree on disk and run fullSync against it
+      const tempBacklog = mkdtempSync(join(tmpdir(), 'sync-manual-'));
+      try {
+        const epicDir = join(tempBacklog, 'E001-test');
+        const mileDir = join(epicDir, 'milestones', 'M001-test');
+        mkdirSync(mileDir, { recursive: true });
+        writeFileSync(
+          join(epicDir, 'epic.md'),
+          `---\ntitle: Test Epic\ncreated: '2026-04-28'\nstatus: epic_defined\n---\n\n## Goal\n\ng\n\n## Success criteria\n- a\n- b\n`,
+        );
+        writeFileSync(
+          join(mileDir, 'milestone.md'),
+          `---\ntitle: Test M\ncreated: '2026-04-28'\nstatus: milestone_defined\nmanual_status: done\nmanual_done_reason: pre-specflow ship\n---\n\n## Goal\n\ng\n\n## Success criteria\n- a\n- b\n`,
+        );
+        fullSync(env.db, tempBacklog);
+        const row = env.db
+          .select()
+          .from(schema.milestones)
+          .where(eq(schema.milestones.id, 'E001/M001'))
+          .get();
+        expect(row?.manualStatus).toBe('done');
+        expect(row?.manualDoneReason).toBe('pre-specflow ship');
+      } finally {
+        rmSync(tempBacklog, { recursive: true, force: true });
+      }
     } finally {
       env.cleanup();
     }

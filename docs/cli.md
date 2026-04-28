@@ -29,6 +29,7 @@ The `ticket` CLI is the **single legal mutator** of runtime state. Every command
 | `slice-done <slice-id>`                       | state    | Set slice's execution status to `done`.                                                |
 | `done <wave-id> --branch <b> --pr <url>`      | state    | Move wave from `in_progress` → `done` (Gate 2). Persists branch + PR url.              |
 | `reset <wave-id>`                             | state    | Force wave + all slices back to `draft`. Clears assignment / branch / PR.              |
+| `mark-done <epic-or-milestone-id> --reason "<text>"` | author / state | Set `manual_status: done` on an epic or milestone whose work shipped outside specflow's wave protocol. Writes frontmatter + reason; commits via `VcsAdapter`. |
 
 > 💡 **Slash commands.** [`SKILLS.md`](../SKILLS.md) wraps the four `create *` commands as `/create-epic`, `/create-milestone`, `/create-wave`, `/create-slice` for use in agent sessions.
 
@@ -188,6 +189,23 @@ Prints cleanup hints for the worktree and branch but **does not** delete them �
 ```text
 ⚠ Worktree may still exist. Run: git worktree remove ../<project>-agent-E001-M003-W002
 ⚠ Branch may still exist. Run: git branch -D agent/E001-M003-W002
+```
+
+---
+
+### `mark-done <id> --reason "<text>"`
+
+**State change.** Sets `manual_status: done` and `manual_done_reason: <text>` on the target's frontmatter (epic.md or milestone.md), stages + commits via `VcsAdapter`, then runs `fullSync`.
+
+- Accepts an epic id (`E001`) or a milestone id (`E001/M001`).
+- Rejects wave / slice ids — those have explicit `done` paths via `ticket done <wave-id> --branch <b> --pr <url>` and `ticket slice-done`.
+- Idempotent: re-running with a new `--reason` updates the reason; the file stays `manual_status: done`.
+
+After the override is set, `deriveMilestoneStatus` (and `deriveEpicStatus`) short-circuit to `'done'` regardless of descendant wave state. This is the only escape hatch for marking work that shipped outside the per-wave protocol — it is **not** a way to bypass Gate 2 for in-flight waves.
+
+```bash
+npm run ticket mark-done E002/M001 --reason "tRPC server shipped in v0.3.0-alpha bundle"
+# → E002/M001 marked done (manual override) — tRPC server shipped in v0.3.0-alpha bundle
 ```
 
 ---

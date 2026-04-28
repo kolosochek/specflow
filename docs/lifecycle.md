@@ -217,6 +217,14 @@ Mirrors the milestone rule one level up — over the union of child milestone st
 
 > 💡 **Implication.** An epic is "in progress" the moment any milestone has any non-draft wave. There's no separate "kickoff" event — work begins by claiming the first wave anywhere in the tree.
 
+### Manual override — `manual_status: done`
+
+Both derive functions check the row's `manual_status` field before applying the wave-aggregation rules above. When `manual_status === 'done'`, the function returns `'done'` immediately — regardless of how many waves exist or what their state is.
+
+This is the explicit escape hatch for work that shipped *before* specflow could describe it (bundle commits, code extracted from another project, etc.). The field is set via `ticket mark-done <epic-or-milestone-id> --reason "<text>"` (see [cli.md → mark-done](cli.md#mark-done-id---reason-text)) and the `manual_done_reason` accompanies it as the audit trail.
+
+This override does **not** apply to waves or slices — those have explicit `done` transitions through Gate 2 (`ticket done <wave-id> --branch <b> --pr <url>`) and `ticket slice-done`. The framework's core rule is: *waves are managed; epics and milestones are observed*. The override only widens the second.
+
 ---
 
 ## A worked example

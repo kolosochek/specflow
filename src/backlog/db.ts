@@ -10,13 +10,15 @@ type BacklogDb = ReturnType<typeof drizzle<typeof schema>>;
 function ensureTables(db: BacklogDb): void {
   db.run(sql`CREATE TABLE IF NOT EXISTS epics (
     id TEXT PRIMARY KEY, title TEXT NOT NULL, path TEXT NOT NULL, created TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'empty'
+    status TEXT NOT NULL DEFAULT 'empty',
+    manual_status TEXT, manual_done_reason TEXT
   )`);
   db.run(sql`CREATE TABLE IF NOT EXISTS milestones (
     id TEXT PRIMARY KEY,
     epic_id TEXT NOT NULL REFERENCES epics(id) ON DELETE CASCADE,
     title TEXT NOT NULL, path TEXT NOT NULL, created TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'empty'
+    status TEXT NOT NULL DEFAULT 'empty',
+    manual_status TEXT, manual_done_reason TEXT
   )`);
   db.run(sql`CREATE TABLE IF NOT EXISTS waves (
     id TEXT PRIMARY KEY, milestone_id TEXT NOT NULL REFERENCES milestones(id) ON DELETE CASCADE,
@@ -45,11 +47,23 @@ function ensureTables(db: BacklogDb): void {
       // Column already exists — expected for new DBs or re-runs
     }
   };
+  // Nullable columns get a separate migrator (no DEFAULT clause).
+  const migrateNullableCol = (table: string, column: string) => {
+    try {
+      db.run(sql.raw(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`));
+    } catch {
+      // Column already exists
+    }
+  };
   migrateCol('epics', 'status', 'empty');
   migrateCol('milestones', 'status', 'empty');
   migrateCol('waves', 'status', 'empty');
   migrateCol('slices', 'created', '');
   migrateCol('slices', 'status', 'empty');
+  migrateNullableCol('epics', 'manual_status');
+  migrateNullableCol('epics', 'manual_done_reason');
+  migrateNullableCol('milestones', 'manual_status');
+  migrateNullableCol('milestones', 'manual_done_reason');
 }
 
 function openDb(dbPath: string) {

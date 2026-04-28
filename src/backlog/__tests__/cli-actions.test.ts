@@ -10,6 +10,7 @@ import {
   createWaveAction,
   createSliceAction,
   validateAndFixAction,
+  markDoneAction,
 } from '../cli-actions.js';
 
 interface Repo {
@@ -482,5 +483,214 @@ describe('cli-actions', () => {
     expect(result.fixed).toBe(0);
     expect(result.errors).toBe(0);
     expect(commitCount(repo.root)).toBe(baseline);
+  });
+});
+
+describe('markDoneAction (E001/M004/W001/S002)', () => {
+  let repo: Repo;
+
+  beforeEach(() => {
+    repo = setupGitRepo();
+  });
+
+  afterEach(() => repo.cleanup());
+
+  it('on an epic id, rewrites the frontmatter (NullAdapter, no commit)', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: markDoneAction on epic id rewrites frontmatter
+    // INPUT: tmp git repo with one epic.md, run with NullAdapter
+    // EXPECTED: file frontmatter has manual_status: done + manual_done_reason; body unchanged
+    const git = new GitAdapter({ cwd: repo.root });
+    await createEpicAction({
+      vcs: git,
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      templatesDir: repo.templatesDir,
+      title: 'Original',
+    });
+    const epicMd = join(repo.backlog, 'E001-original', 'epic.md');
+    const before = readFileSync(epicMd, 'utf-8');
+    const baseline = commitCount(repo.root);
+
+    await markDoneAction({
+      vcs: new NullAdapter(),
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      id: 'E001',
+      reason: 'shipped externally',
+    });
+
+    const after = readFileSync(epicMd, 'utf-8');
+    expect(after).toMatch(/manual_status:\s*done/);
+    expect(after).toContain('shipped externally');
+    expect(commitCount(repo.root)).toBe(baseline);
+    // body sections preserved
+    const bodyBefore = before.split(/^---\s*$/m).slice(2).join('---').trim();
+    const bodyAfter = after.split(/^---\s*$/m).slice(2).join('---').trim();
+    expect(bodyAfter).toBe(bodyBefore);
+  });
+
+  it('on a milestone id, rewrites milestone.md and commits with GitAdapter', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: markDoneAction on milestone id with GitAdapter
+    // INPUT: pre-seeded epic+milestone, GitAdapter
+    // EXPECTED: milestone.md gets the fields; one new commit lands
+    const git = new GitAdapter({ cwd: repo.root });
+    const deps = {
+      vcs: git,
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      templatesDir: repo.templatesDir,
+    };
+    await createEpicAction({ ...deps, title: 'P' });
+    await createMilestoneAction({ ...deps, epicId: 'E001', title: 'M' });
+    const mileMd = join(repo.backlog, 'E001-p', 'milestones', 'M001-m', 'milestone.md');
+    const baseline = commitCount(repo.root);
+
+    await markDoneAction({
+      vcs: git,
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      id: 'E001/M001',
+      reason: 'pre-existing',
+    });
+
+    expect(readFileSync(mileMd, 'utf-8')).toMatch(/manual_status:\s*done/);
+    expect(commitCount(repo.root)).toBe(baseline + 1);
+  });
+
+  it('on a wave id, rejects with a clear error', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: wave-level manual override is not supported
+    // INPUT: pre-seeded structure, run with id 'E001/M001/W001'
+    // EXPECTED: rejects with Error matching /wave-level manual override/i
+    const git = new GitAdapter({ cwd: repo.root });
+    const deps = {
+      vcs: git,
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      templatesDir: repo.templatesDir,
+    };
+    await createEpicAction({ ...deps, title: 'P' });
+    await createMilestoneAction({ ...deps, epicId: 'E001', title: 'M' });
+    await createWaveAction({ ...deps, parentId: 'E001/M001', title: 'W' });
+
+    let caught: unknown = null;
+    try {
+      await markDoneAction({
+        vcs: git,
+        projectRoot: repo.root,
+        backlogDir: repo.backlog,
+        id: 'E001/M001/W001',
+        reason: 'x',
+      });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/wave-level manual override/i);
+  });
+
+  it('on a non-existent id, rejects with not-found', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: markDoneAction on missing target rejects
+    // INPUT: empty backlog, id 'E999'
+    // EXPECTED: Error matching /not found/i
+    let caught: unknown = null;
+    try {
+      await markDoneAction({
+        vcs: new NullAdapter(),
+        projectRoot: repo.root,
+        backlogDir: repo.backlog,
+        id: 'E999',
+        reason: 'x',
+      });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/not found/i);
+  });
+
+  it('under NullAdapter the file is rewritten but no git commit lands', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: NullAdapter — disk modify but no commit
+    // INPUT: tmp git repo with epic, NullAdapter
+    // EXPECTED: file modified; commitCount unchanged
+    const git = new GitAdapter({ cwd: repo.root });
+    await createEpicAction({
+      vcs: git,
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      templatesDir: repo.templatesDir,
+      title: 'Z',
+    });
+    const baseline = commitCount(repo.root);
+    await markDoneAction({
+      vcs: new NullAdapter(),
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      id: 'E001',
+      reason: 'r',
+    });
+    expect(commitCount(repo.root)).toBe(baseline);
+    expect(readFileSync(join(repo.backlog, 'E001-z', 'epic.md'), 'utf-8'))
+      .toMatch(/manual_status:\s*done/);
+  });
+
+  it('GitAdapter commit message includes id and the word mark-done', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: commit-message format
+    // INPUT: GitAdapter, epic id 'E001'
+    // EXPECTED: git log -1 subject matches /E001.*mark.?done/i
+    const git = new GitAdapter({ cwd: repo.root });
+    await createEpicAction({
+      vcs: git,
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      templatesDir: repo.templatesDir,
+      title: 'Z',
+    });
+    await markDoneAction({
+      vcs: git,
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      id: 'E001',
+      reason: 'r',
+    });
+    expect(lastSubject(repo.root)).toMatch(/E001.*mark.?done/i);
+  });
+
+  it('idempotent re-application updates the reason and stays done', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: re-running on already-done preserves manual_status, updates reason
+    // INPUT: epic already with manual_status: done
+    // EXPECTED: no error; manual_status stays 'done'; manual_done_reason updated
+    const git = new GitAdapter({ cwd: repo.root });
+    await createEpicAction({
+      vcs: git,
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      templatesDir: repo.templatesDir,
+      title: 'Z',
+    });
+    await markDoneAction({
+      vcs: new NullAdapter(),
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      id: 'E001',
+      reason: 'first',
+    });
+    await markDoneAction({
+      vcs: new NullAdapter(),
+      projectRoot: repo.root,
+      backlogDir: repo.backlog,
+      id: 'E001',
+      reason: 'second',
+    });
+    const final = readFileSync(join(repo.backlog, 'E001-z', 'epic.md'), 'utf-8');
+    expect(final).toMatch(/manual_status:\s*done/);
+    expect(final).toContain('second');
+    expect(final).not.toContain('first');
   });
 });

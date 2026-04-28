@@ -22,6 +22,7 @@ import {
   createWaveAction,
   createSliceAction,
   validateAndFixAction,
+  markDoneAction,
 } from '../src/backlog/cli-actions.js';
 import { eq } from 'drizzle-orm';
 import matter from 'gray-matter';
@@ -49,12 +50,13 @@ await (async () => {
       case 'slice-done': cmdSliceDone(args[0]); break;
       case 'reset': cmdReset(args[0]); break;
       case 'create': await cmdCreate(args[0], args.slice(1)); break;
+      case 'mark-done': await cmdMarkDone(args); break;
       case 'checklist': cmdChecklist(args[0], args.includes('--promote')); break;
       case 'sync': cmdSync(); break;
       case 'validate': await cmdValidate(); break;
       default:
         console.error(`Unknown command: ${command}`);
-        console.error('Usage: npm run ticket <list|show|promote|claim|status|done|slice-done|reset|create|checklist|sync|validate>');
+        console.error('Usage: npm run ticket <list|show|promote|claim|status|done|slice-done|reset|create|mark-done|checklist|sync|validate>');
         process.exit(1);
     }
   } finally {
@@ -223,6 +225,27 @@ function cmdReset(id: string) {
   const projectName = basename(PROJECT_ROOT);
   console.log(`\n⚠ Worktree may still exist. Run: git worktree remove ../${projectName}-agent-${waveSlug}`);
   console.log(`⚠ Branch may still exist. Run: git branch -D agent/${waveSlug}`);
+}
+
+async function cmdMarkDone(rawArgs: string[]) {
+  const id = rawArgs[0];
+  const reasonIdx = rawArgs.indexOf('--reason');
+  const reason = reasonIdx >= 0 ? rawArgs[reasonIdx + 1] : undefined;
+
+  if (!id || !reason) {
+    console.error('Usage: ticket mark-done <epic-id|epic-id/milestone-id> --reason "<text>"');
+    process.exit(1);
+  }
+
+  await markDoneAction({
+    vcs,
+    projectRoot: PROJECT_ROOT,
+    backlogDir: BACKLOG_DIR,
+    id,
+    reason,
+  });
+  fullSync(db, BACKLOG_DIR);
+  console.log(`${id} marked done (manual override) — ${reason}`);
 }
 
 // --- Create commands ---
