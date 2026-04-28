@@ -326,3 +326,52 @@ describe('frontmatter schemas — coverage expansion', () => {
     }
   });
 });
+
+describe('frontmatter — manual_status override (E001/M004/W001/S001)', () => {
+  it('epicFrontmatter accepts manual_status:done + reason', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: epic gains optional manual override fields
+    // INPUT: full object with manual_status='done' + manual_done_reason
+    // EXPECTED: parse succeeds, both fields preserved
+    const result = epicFrontmatter.safeParse({
+      title: 'X',
+      created: '2026-04-27',
+      manual_status: 'done',
+      manual_done_reason: 'shipped before specflow',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.data as Record<string, unknown>).manual_status).toBe('done');
+      expect((result.data as Record<string, unknown>).manual_done_reason).toBe('shipped before specflow');
+    }
+  });
+
+  it('epicFrontmatter rejects manual_status outside the enum', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: only 'done' is currently allowed for manual_status
+    // INPUT: object with manual_status='archived'
+    // EXPECTED: safeParse returns success: false
+    const result = epicFrontmatter.safeParse({
+      title: 'X',
+      created: '2026-04-27',
+      manual_status: 'archived',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('milestoneFrontmatter accepts manual_status:done', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: milestone has the same optional manual_status field
+    // INPUT: equivalent shape on milestoneFrontmatter
+    // EXPECTED: parse succeeds with field preserved
+    const result = milestoneFrontmatter.safeParse({
+      title: 'M',
+      created: '2026-04-27',
+      manual_status: 'done',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.data as Record<string, unknown>).manual_status).toBe('done');
+    }
+  });
+});

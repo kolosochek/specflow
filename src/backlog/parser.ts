@@ -102,6 +102,8 @@ export interface ParsedEpic {
   path: string;
   created: string;
   status: string;
+  manualStatus: string | null;
+  manualDoneReason: string | null;
 }
 
 export interface ParsedMilestone {
@@ -111,6 +113,8 @@ export interface ParsedMilestone {
   path: string;
   created: string;
   status: string;
+  manualStatus: string | null;
+  manualDoneReason: string | null;
 }
 
 export interface ParsedWave {
@@ -145,6 +149,8 @@ export function parseEpic(content: string, filePath: string): ParsedEpic | null 
     path: filePath,
     created: parsed.data.created,
     status: parsed.data.status,
+    manualStatus: parsed.data.manual_status ?? null,
+    manualDoneReason: parsed.data.manual_done_reason ?? null,
   };
 }
 
@@ -162,6 +168,8 @@ export function parseMilestone(content: string, filePath: string): ParsedMilesto
     path: filePath,
     created: parsed.data.created,
     status: parsed.data.status,
+    manualStatus: parsed.data.manual_status ?? null,
+    manualDoneReason: parsed.data.manual_done_reason ?? null,
   };
 }
 

@@ -11,12 +11,16 @@ export const epicFrontmatter = z.object({
   title: z.string(),
   created: yamlDateString,
   status: z.enum(['empty', 'epic_defined']).default('empty'),
+  manual_status: z.enum(['done']).optional(),
+  manual_done_reason: z.string().optional(),
 });
 
 export const milestoneFrontmatter = z.object({
   title: z.string(),
   created: yamlDateString,
   status: z.enum(['empty', 'milestone_defined']).default('empty'),
+  manual_status: z.enum(['done']).optional(),
+  manual_done_reason: z.string().optional(),
 });
 
 export const waveFrontmatter = z.object({

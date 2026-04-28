@@ -171,6 +171,16 @@ export function deriveMilestoneStatus(
   db: BacklogDb,
   milestoneId: string,
 ): 'draft' | 'active' | 'done' {
+  // Manual override short-circuits the wave-aggregation rules. Set via the
+  // `mark-done` CLI command when work shipped outside specflow's protocol
+  // (e.g. before specflow described the milestone). See E001/M004.
+  const milestoneRow = db
+    .select({ manualStatus: schema.milestones.manualStatus })
+    .from(schema.milestones)
+    .where(eq(schema.milestones.id, milestoneId))
+    .get();
+  if (milestoneRow?.manualStatus === 'done') return 'done';
+
   const waveStates = db
     .select({
       status: schema.waveState.status,
@@ -200,6 +210,14 @@ export function deriveEpicStatus(
   db: BacklogDb,
   epicId: string,
 ): 'draft' | 'active' | 'done' {
+  // Same manual-override short-circuit as deriveMilestoneStatus. See E001/M004.
+  const epicRow = db
+    .select({ manualStatus: schema.epics.manualStatus })
+    .from(schema.epics)
+    .where(eq(schema.epics.id, epicId))
+    .get();
+  if (epicRow?.manualStatus === 'done') return 'done';
+
   const milestones = db
     .select({ id: schema.milestones.id })
     .from(schema.milestones)

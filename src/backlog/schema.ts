@@ -8,6 +8,8 @@ export const epics = sqliteTable('epics', {
   path: text('path').notNull(),
   created: text('created').notNull(),
   status: text('status').notNull().default('empty'),
+  manualStatus: text('manual_status'),
+  manualDoneReason: text('manual_done_reason'),
 });
 
 export const milestones = sqliteTable('milestones', {
@@ -19,6 +21,8 @@ export const milestones = sqliteTable('milestones', {
   path: text('path').notNull(),
   created: text('created').notNull(),
   status: text('status').notNull().default('empty'),
+  manualStatus: text('manual_status'),
+  manualDoneReason: text('manual_done_reason'),
 });
 
 export const waves = sqliteTable('waves', {
