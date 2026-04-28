@@ -44,10 +44,10 @@ Say you want waves to track `priority: low | medium | high`.
    });
    ```
 2. **Update the template** if the field should appear by default.
-3. **Update `validate`** in `scripts/ticket.ts` (the second Zod schema there — currently a duplicate, see [Known limitation — parser ↔ spec drift](#known-limitation--parser--spec-drift) below).
+3. **Update `validate`** in `scripts/ticket.ts` (the second Zod schema there — see [Known limitation — parser ↔ spec drift](#known-limitation--parser--spec-drift) below for the consolidation path being prepared).
 4. **(If projected to DB)** add the column in `schema.ts`, write a migration in `db.ts → ensureTables`, and add the upsert in `sync.ts`.
 
-> ⚠️ **Schema duplication.** As of `v0.1`, frontmatter validation is duplicated in `parser.ts` and `scripts/ticket.ts`. Future versions should consolidate; for now, update both.
+> ⚠️ **Schema duplication (current).** Today, frontmatter validation is duplicated in `parser.ts` and `scripts/ticket.ts`. The `E001/M001` consolidation milestone collapses both into a single `src/backlog/frontmatter.ts` module; until that ships, update both call sites.
 
 ---
 
@@ -119,7 +119,7 @@ This is a deliberate trade-off. Execution history is a runtime concern; archivin
 1. **Snapshot.** Periodically commit a JSON dump of `wave_state` / `slice_state` into the repo (e.g. `.specflow/state-snapshot.json`). Treat the snapshot as advisory, not authoritative.
 2. **Append-only log.** Add a `state_events` table that records every transition with timestamp + actor. Survives DB restoration if backed up; doesn't get rewritten by `reset`.
 
-`v0.1` does neither. If the DB is lost, you re-create the wave in `draft` and re-run.
+specflow ships **neither** today. If the DB is lost, you re-create the wave in `draft` and re-run.
 
 ---
 
@@ -130,13 +130,13 @@ The grammar described in [document-model.md](document-model.md) is **independent
 - The Zod schemas in `src/backlog/parser.ts` (`milestoneFrontmatter`, `waveFrontmatter`, `sliceFrontmatter`).
 - The mechanical checks in `src/backlog/checklist.ts` (`checkMilestone`, `checkWave`, `checkSlice`).
 
-There is **no automatic check** that the spec, the Zod schemas, and the checklist functions agree. If the spec is updated without updating the code (or vice versa), they will silently drift. This is the framework's biggest soft spot in `v0.1`.
+There is **no automatic check** that the spec, the Zod schemas, and the checklist functions agree. If the spec is updated without updating the code (or vice versa), they will silently drift.
 
-Mitigations under consideration for `v0.2`:
+Active and planned mitigations:
 
-- Generate the human-readable docs **from** a single machine-readable schema (e.g. JSON Schema → templates).
-- Add a "spec contract test" that parses `document-model.md` and confirms every documented check exists in `checklist.ts`.
-- Version the document grammar separately (`grammar: v0.1` in frontmatter), so that legacy artefacts can be recognized after a breaking change.
+- 🟡 **In-flight (`E001/M001` — Grammar consolidation):** collapse the duplicated Zod blocks in `parser.ts` and `scripts/ticket.ts` into a single canonical `src/backlog/frontmatter.ts` module. Closes the parser-vs-CLI half of the drift surface.
+- 🔮 **Planned (`v1.0`):** generate the human-readable docs **from** a single machine-readable schema (e.g. JSON Schema → templates), or a "spec contract test" that parses `document-model.md` and confirms every documented check exists in `checklist.ts`.
+- 🔮 **Planned (`v1.0`+):** version the document grammar separately (`grammar: v0.1` in frontmatter), so legacy artefacts can be recognized after a breaking change.
 
 For now, the rule is: **when you change the spec, update both `parser.ts` and `checklist.ts`. When you change `parser.ts` or `checklist.ts`, update the spec.** Both are short files; mechanical discipline is sufficient at this scale.
 
@@ -144,9 +144,9 @@ For now, the rule is: **when you change the spec, update both `parser.ts` and `c
 
 ## Observed divergences
 
-Patterns observed in real waves that the `v0.1` checklist does **not** enforce. They're useful and probably worth formalizing in a future version:
+Patterns observed in real waves (in the `hhru` reference project from which specflow was extracted) that the checklist does **not** enforce today. They're useful and probably worth formalizing in a future version:
 
-| Pattern                                                                          | Where seen                            | Status              |
+| Pattern                                                                          | Where seen (in `hhru`)                | Status              |
 | -------------------------------------------------------------------------------- | ------------------------------------- | ------------------- |
 | `milestone_criteria: [1, 2, 3]` in wave frontmatter — cross-ref to milestone success criteria indices | `M004/W002`                           | Unformalized        |
 | `## Slice dependency order` section in `wave.md` with a Mermaid graph             | `M005/W001`                           | Unformalized        |
@@ -213,6 +213,7 @@ Compatibility intent:
 | ------- | -------------------------------------------------------------------------------------------------------- |
 | `v0.1`  | Initial extraction from `hhru`. Three-layer model: Milestone → Wave → Slice. 52 unit tests, no Epic.     |
 | `v0.2`  | **Breaking.** Epic layer added on top. 4-level composite IDs. Slash commands. CI. Live backlog.           |
+| `v0.3.0-alpha` | Presentation layer foundations: HTTP server (`E002/M001`) + React/MUI kanban (`E002/M002`). No grammar change. |
 
 ### v0.1 → v0.2 migration
 
@@ -256,9 +257,16 @@ npm run ticket checklist E001 --promote
 
 **Loss:** all execution state (`wave_state`, `slice_state`) is reset to `draft`. Content readiness is preserved (it's in MD). Branch and PR URLs of completed waves are lost — record them in the new epic's success criteria as historical proof if needed.
 
+### In flight
+
+- **`v0.3` (foundation epic, `E001`)** — three orthogonal hardening waves:
+  - `E001/M001` — frontmatter Zod-schema dedup (`parser.ts` + CLI share one source).
+  - `E001/M002` — CLI/git decoupling via `VcsAdapter` (see [proposal](proposals/cli-vcs-decoupling.md)). Adds `--no-commit` flag, `SPECFLOW_VCS=none` env, `SPECFLOW_COMMIT_TEMPLATE` env. No grammar change.
+  - `E001/M003` — operational maturity: removes the unused `watcher.ts` module + `chokidar` dep ([decision record](proposals/watcher-fate.md)).
+- **`v0.3` (presentation epic, `E002/M003`)** — agent orchestration: tmux session manager + tRPC router + WebSocket pty bridge so the kanban can spawn / kill / stream Claude Code agents. Wave 2 (Agent UI) follows.
+
 ### Future
 
-- **`v0.3`** — CLI/git decoupling. See [proposal](proposals/cli-vcs-decoupling.md). No grammar change.
-- **`v1.0`** — formalize observed divergences (`milestone_criteria`, etc.); spec ↔ code drift detection becomes a CI step.
+- **`v1.0`** — formalize observed divergences (`milestone_criteria`, etc.); spec ↔ code drift detection becomes a CI step; document-grammar versioning in frontmatter.
 
 When formalizing one of the observed-but-unvalidated patterns, that's a minor-version event — write the formalization, run `validate --fix` to backfill, ship.
