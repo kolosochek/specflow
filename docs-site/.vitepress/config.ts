@@ -17,6 +17,7 @@ export default defineConfig({
         text: 'Concepts',
         items: [
           { text: 'The four axioms', link: '/concepts/axioms' },
+          { text: 'Lifecycle and gates', link: '/concepts/lifecycle' },
         ],
       },
     ],
