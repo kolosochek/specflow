@@ -121,6 +121,8 @@ This is a deliberate trade-off. Execution history is a runtime concern; archivin
 
 specflow ships **neither** today. If the DB is lost, you re-create the wave in `draft` and re-run.
 
+> 🛑 **Incremental sync is not a built-in feature.** The framework intentionally does **not** ship a filesystem watcher. The single supported recovery mechanism is `npm run ticket sync`, which is a one-shot full sync from disk into `backlog.sqlite`. If you edit several slices in an IDE and want the DB to reflect those edits, run `sync` (or `validate`, which re-reads the corpus) at the end of the editing session — there is no daemon. If a deployment of specflow ever needs live sync (e.g. behind the long-running HTTP/tRPC server from `E002/M001`), wire it in at that server, not as a CLI command. See decision record [`docs/proposals/watcher-fate.md`](proposals/watcher-fate.md) for the rationale.
+
 ---
 
 ## Known limitation — parser ↔ spec drift
