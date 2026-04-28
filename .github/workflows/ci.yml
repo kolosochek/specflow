@@ -29,7 +29,11 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        # --legacy-peer-deps: VitePress's @docsearch/css transitive declares
+        # `react: < 19.0.0` as a peer-dep. Our top-level react is ^19. The
+        # tree resolves correctly but npm ci's strict check fails without
+        # the flag. Acceptable until @docsearch publishes a react@19-aware version.
+        run: npm ci --legacy-peer-deps
 
       - name: Typecheck
         run: npm run typecheck
