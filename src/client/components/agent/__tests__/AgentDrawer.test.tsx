@@ -16,6 +16,15 @@ const killMutateSpy = vi.fn();
 let queryOptions: { refetchInterval?: number } | undefined;
 let listData: TmuxSessionInfo[] = [];
 
+// Mock the real XTermTerminal — its internals (xterm.js + matchMedia) are not
+// what this test cares about. We only verify AgentDrawer mounts it with the
+// correct sessionName.
+vi.mock('../XTermTerminal.js', () => ({
+  XTermTerminal: ({ sessionName }: { sessionName: string }) => (
+    <div data-testid="xterm-terminal" data-session={sessionName} />
+  ),
+}));
+
 vi.mock('../../../trpc.js', () => ({
   trpc: {
     agent: {
@@ -98,16 +107,16 @@ describe('AgentDrawer', () => {
     expect(killMutateSpy).toHaveBeenCalledWith({ sessionName: 'agent-X' });
   });
 
-  it('expand row mounts XTermTerminalPlaceholder with sessionName', () => {
+  it('expand row mounts the XTermTerminal with sessionName', () => {
     // SCENARIO->INPUT->EXPECTED
-    // SCENARIO: expand row shows terminal placeholder
+    // SCENARIO: expand row shows terminal (real XTermTerminal after S003 swap)
     // INPUT: click open-terminal toggle
-    // EXPECTED: XTermTerminalPlaceholder mounted with correct sessionName prop
+    // EXPECTED: terminal mounted with correct sessionName prop
     listData = [makeSession({ sessionName: 'agent-Y' })];
     render(<AgentDrawer />);
     fireEvent.click(screen.getByTestId('open-terminal-agent-Y'));
-    const placeholder = screen.getByTestId('xterm-terminal-placeholder');
-    expect(placeholder).toHaveAttribute('data-session', 'agent-Y');
+    const terminal = screen.getByTestId('xterm-terminal');
+    expect(terminal).toHaveAttribute('data-session', 'agent-Y');
   });
 
   it('Cancel in kill confirmation dialog does NOT invoke mutation', () => {
