@@ -1,5 +1,7 @@
 # specflow
 
+> 📖 **Documentation:** [kolosochek.github.io/specflow](https://kolosochek.github.io/specflow/) — Why · Quick start · Concepts · Benefits
+
 > **A microframework for spec-driven development.**
 > Formalize a strategic theme once, decompose it into reviewable units of work, and let humans or agents execute it under a strict TDD contract — without ever drifting from the spec.
 
