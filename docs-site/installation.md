@@ -5,9 +5,13 @@ Two paths: **install via npm** (recommended for most users) or **clone the repo*
 ## Path A — npm install (recommended)
 
 ```bash
-npm install --save-dev specflow
+npm install --save-dev @dkolosovsky/specflow
 npx specflow init
 ```
+
+::: info Why scoped?
+The unscoped `specflow` name was rejected by the npm registry as too similar to the unrelated `spec-flow` package. The CLI binary is still `specflow` — only the package install path changes.
+:::
 
 `init` creates:
 
@@ -77,7 +81,7 @@ This gives you the full reference implementation: CLI + tRPC server + React/MUI 
 npx specflow --help
 ```
 
-You should see the command list. If `specflow: command not found`, ensure you ran `npm install --save-dev specflow` (not `npm install -g`) and use `npx`.
+You should see the command list. If `specflow: command not found`, ensure you ran `npm install --save-dev @dkolosovsky/specflow` (not `npm install -g`) and use `npx`.
 
 ## Next
 
