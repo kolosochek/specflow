@@ -7,6 +7,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Why', link: '/why' },
+      { text: 'Quick start', link: '/quick-start' },
     ],
   },
 });
