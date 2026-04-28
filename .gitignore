@@ -15,3 +15,7 @@ dist/
 backlog.sqlite
 backlog.sqlite-shm
 backlog.sqlite-wal
+
+# VitePress build artefacts
+docs-site/.vitepress/cache/
+docs-site/.vitepress/dist/
