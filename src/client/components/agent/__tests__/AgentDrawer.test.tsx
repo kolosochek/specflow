@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, within, fireEvent, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
+
+afterEach(() => cleanup());
 
 import type { TmuxSessionInfo } from '../../../../server/services/tmuxManager.js';
 
