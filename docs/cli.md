@@ -6,7 +6,7 @@ The `ticket` CLI is the **single legal mutator** of runtime state. Every command
 - 📝 **Authoring** — creates files and seeds frontmatter.
 - ⚙️ **State** — changes `wave_state` / `slice_state` under preconditions.
 
-> 🛠 **Reference implementation.** `scripts/ticket.ts` (TypeScript, run via `tsx`). All commands invoked as `npm run ticket <cmd> …`.
+> 🛠 **Reference implementation.** `src/cli.ts` (TypeScript, compiled to `dist/cli.js` for the published `specflow` bin; run via `tsx` in dev). Commands invoked as `npx specflow <cmd> …` (or `npm run ticket <cmd> …` in the cloned-repo workflow).
 
 ---
 

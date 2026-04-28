@@ -21,6 +21,7 @@ export default defineConfig({
     lastUpdated: true,
     nav: [
       { text: 'Why', link: '/why' },
+      { text: 'Install', link: '/installation' },
       { text: 'Quick start', link: '/quick-start' },
       { text: 'Concepts', link: '/concepts/axioms' },
     ],

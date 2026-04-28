@@ -44,10 +44,10 @@ Say you want waves to track `priority: low | medium | high`.
    });
    ```
 2. **Update the template** if the field should appear by default.
-3. **Update `validate`** in `scripts/ticket.ts` (the second Zod schema there — see [Known limitation — parser ↔ spec drift](#known-limitation--parser--spec-drift) below for the consolidation path being prepared).
+3. **Update `validate`** in `src/cli.ts` (the second Zod schema there — see [Known limitation — parser ↔ spec drift](#known-limitation--parser--spec-drift) below for the consolidation path being prepared).
 4. **(If projected to DB)** add the column in `schema.ts`, write a migration in `db.ts → ensureTables`, and add the upsert in `sync.ts`.
 
-> ⚠️ **Schema duplication (current).** Today, frontmatter validation is duplicated in `parser.ts` and `scripts/ticket.ts`. The `E001/M001` consolidation milestone collapses both into a single `src/backlog/frontmatter.ts` module; until that ships, update both call sites.
+> ⚠️ **Schema duplication (historical).** Frontmatter validation was previously duplicated in `parser.ts` and `src/cli.ts`. The `E001/M001` consolidation milestone collapsed both into a single `src/backlog/frontmatter.ts` module — that is now the only source.
 
 ---
 
@@ -90,12 +90,12 @@ Say you want to track `claimed → blocked` so an agent can yield without resett
 
 ## Add a new CLI command
 
-The CLI is a single switch in `scripts/ticket.ts`. Adding a command:
+The CLI is a single switch in `src/cli.ts`. Adding a command:
 
 1. Add a `case '<name>': cmd<Name>(args); break;` branch.
 2. Implement the function — read DB, validate preconditions, mutate, return a one-line confirmation.
 3. Update the `Usage:` line in the default branch.
-4. Add an integration test under `scripts/__tests__/`.
+4. Add an integration test under `src/backlog/__tests__/`.
 
 > 💡 **Keep the boundary clean.** Domain logic (e.g. transition validation) belongs in `state.ts`, not in the CLI. The CLI is glue: parse args, call domain function, format result.
 
@@ -136,7 +136,7 @@ There is **no automatic check** that the spec, the Zod schemas, and the checklis
 
 Active and planned mitigations:
 
-- 🟡 **In-flight (`E001/M001` — Grammar consolidation):** collapse the duplicated Zod blocks in `parser.ts` and `scripts/ticket.ts` into a single canonical `src/backlog/frontmatter.ts` module. Closes the parser-vs-CLI half of the drift surface.
+- ✅ **Shipped (`E001/M001` — Grammar consolidation):** the duplicated Zod blocks in `parser.ts` and `src/cli.ts` have been collapsed into a single canonical `src/backlog/frontmatter.ts` module. Closes the parser-vs-CLI half of the drift surface.
 - 🔮 **Planned (`v1.0`):** generate the human-readable docs **from** a single machine-readable schema (e.g. JSON Schema → templates), or a "spec contract test" that parses `document-model.md` and confirms every documented check exists in `checklist.ts`.
 - 🔮 **Planned (`v1.0`+):** version the document grammar separately (`grammar: v0.1` in frontmatter), so legacy artefacts can be recognized after a breaking change.
 

@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": false,
+    "sourceMap": false,
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": ["src/cli.ts", "src/backlog/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "examples",
+    "src/client/**/*",
+    "src/server/**/*",
+    "src/site/**/*",
+    "**/__tests__/**"
+  ]
+}
