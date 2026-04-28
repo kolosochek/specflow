@@ -115,14 +115,14 @@ describe('commitMessageFor', () => {
   it('commits.ts is the only place the default literal "[backlog] create" lives', () => {
     // SCENARIO->INPUT->EXPECTED
     // SCENARIO: greppable single-source-of-truth invariant for the default commit prefix
-    // INPUT: scan cli-actions.ts and ticket.ts for the literal '[backlog] create'
+    // INPUT: scan cli-actions.ts and src/cli.ts for the literal '[backlog] create'
     // EXPECTED: zero matches in either (the literal lives only inside commits.ts)
     const cliActions = readFileSync(
       join(process.cwd(), 'src', 'backlog', 'cli-actions.ts'),
       'utf-8',
     );
-    const ticket = readFileSync(join(process.cwd(), 'scripts', 'ticket.ts'), 'utf-8');
+    const cli = readFileSync(join(process.cwd(), 'src', 'cli.ts'), 'utf-8');
     expect(cliActions).not.toMatch(/\[backlog\] create/);
-    expect(ticket).not.toMatch(/\[backlog\] create/);
+    expect(cli).not.toMatch(/\[backlog\] create/);
   });
 });

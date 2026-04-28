@@ -29,7 +29,7 @@ Every epic, milestone, wave, and slice is a Markdown file with **YAML frontmatte
 │                           └── S002-wire-up-middleware.md
 ├── examples/sample-backlog/                          # reference example, NOT scanned by CLI
 ├── backlog.sqlite                                    # projection — gitignored
-├── scripts/ticket.ts                                 # CLI (reference impl.)
+├── src/cli.ts                                        # CLI entrypoint (reference impl.)
 └── src/backlog/                                      # parser, checklist, state, sync (reference impl.)
 ```
 

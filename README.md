@@ -8,9 +8,31 @@
 **Version:** `v0.3.0-alpha`
 **Status:** Web UI lands. Epic → Milestone → Wave → Slice grammar, CLI, tRPC HTTP server, React + MUI kanban board, dogfooded backlog.
 
-Quick start:
+## Install
 
 ```bash
+npm install --save-dev specflow
+npx specflow init
+# → backlog/ + backlog/templates/{epic,milestone,wave,slice}.md created
+```
+
+Then drive the lifecycle:
+
+```bash
+npx specflow create epic "Onboarding"
+npx specflow create milestone E001 "Auth flow"
+npx specflow create wave E001/M001 "Cookie hardening"
+npx specflow create slice E001/M001/W001 "Set SameSite"
+npx specflow checklist E001/M001/W001 --promote
+npx specflow promote E001/M001/W001
+```
+
+Full walkthrough: [docs.kolosochek.github.io/specflow/quick-start](https://kolosochek.github.io/specflow/quick-start).
+
+To run the kanban UI + tRPC server (cloned-repo path):
+
+```bash
+git clone https://github.com/kolosochek/specflow.git && cd specflow
 npm install
 npm run dev    # tRPC server on :3030, Vite on :5173 with HMR
 # open http://localhost:5173 → live kanban for backlog/
@@ -115,7 +137,7 @@ flowchart LR
 
 The reference implementation ships in this repo:
 
-- **CLI:** [`scripts/ticket.ts`](scripts/ticket.ts) — TypeScript, run via `tsx`.
+- **CLI:** [`src/cli.ts`](src/cli.ts) — TypeScript, run via `tsx` in dev or compiled to `dist/cli.js` for the published `specflow` bin.
 - **Core:** [`src/backlog/`](src/backlog/) — `parser.ts`, `checklist.ts`, `state.ts`, `sync.ts`, `db.ts`, `schema.ts`, `watcher.ts`.
 - **HTTP server:** [`src/server/`](src/server/) — Express + tRPC, routes the CLI logic over HTTP for the UI.
 - **Web UI:** [`src/client/`](src/client/) — Vite + React 19 + MUI v6 + `@trpc/react-query`. The kanban lives at [`pages/BacklogPage.tsx`](src/client/pages/BacklogPage.tsx).
@@ -128,9 +150,10 @@ To run it:
 
 ```bash
 npm install
-npm test                     # 66 backlog unit tests
+npm test                     # backlog + UI + site unit tests
 npm run typecheck            # tsc --noEmit
-npm run ticket list          # exercise the CLI
+npm run ticket list          # exercise the CLI (alias for tsx src/cli.ts list)
+npm run build:lib            # produce publishable dist/cli.js + dist/backlog/
 npm run dev                  # tRPC server on :3030, Vite on :5173
 npm run build                # builds dist/client + dist/server
 npm run start                # serves built client from the prod server

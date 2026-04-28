@@ -269,13 +269,13 @@ describe('cli-actions', () => {
     expect(existsSync(join(repo.backlog, 'E001-boom', 'epic.md'))).toBe(true);
   });
 
-  it('scripts/ticket.ts source no longer contains execSync git add or git commit', () => {
+  it('src/cli.ts source no longer contains execSync git add or git commit', () => {
     // SCENARIO->INPUT->EXPECTED
-    // SCENARIO: scripts/ticket.ts source no longer contains execSync('git add' or execSync('git commit'
-    // INPUT: read scripts/ticket.ts source
+    // SCENARIO: src/cli.ts source no longer contains execSync('git add' or execSync('git commit'
+    // INPUT: read src/cli.ts source
     // EXPECTED: regex /execSync\(\s*['"`]git\s+(add|commit)/ does not match
-    const ticketSrc = readFileSync(join(process.cwd(), 'scripts', 'ticket.ts'), 'utf-8');
-    expect(ticketSrc).not.toMatch(/execSync\(\s*['"`]git\s+(add|commit)/);
+    const cliSrc = readFileSync(join(process.cwd(), 'src', 'cli.ts'), 'utf-8');
+    expect(cliSrc).not.toMatch(/execSync\(\s*['"`]git\s+(add|commit)/);
   });
 
   it('createMilestoneAction with NullAdapter writes file but skips commit', async () => {

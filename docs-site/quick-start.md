@@ -5,24 +5,28 @@ A working specflow install with one full Epic → Wave → Slice cycle, in under
 ## 1. Install
 
 ```bash
-git clone https://github.com/kolosochek/specflow.git
-cd specflow
-npm install
+npm install --save-dev specflow
+npx specflow init
+# → Creates backlog/ + backlog/templates/{epic,milestone,wave,slice}.md
 ```
+
+::: tip
+Cloning the repo instead of installing? See [Installation](/installation) for the contributor path.
+:::
 
 ## 2. Create your first epic
 
 ```bash
-npm run ticket -- create epic "Onboarding"
+npx specflow create epic "Onboarding"
 # → Created E001: Onboarding
 ```
 
 ## 3. Create a milestone, a wave, and a slice
 
 ```bash
-npm run ticket -- create milestone E001 "First milestone"
-npm run ticket -- create wave E001/M001 "First wave"
-npm run ticket -- create slice E001/M001/W001 "First slice"
+npx specflow create milestone E001 "First milestone"
+npx specflow create wave E001/M001 "First wave"
+npx specflow create slice E001/M001/W001 "First slice"
 ```
 
 Each `create` writes a Markdown file from the template and (by default) auto-commits it.
@@ -32,25 +36,25 @@ Each `create` writes a Markdown file from the template and (by default) auto-com
 Open the four newly-created files (`epic.md`, `milestone.md`, `wave.md`, `slices/S001-first-slice.md`) and fill in their sections. Then walk each one through the readiness checklist:
 
 ```bash
-npm run ticket -- checklist E001 --promote
-npm run ticket -- checklist E001/M001 --promote
-npm run ticket -- checklist E001/M001/W001/S001 --promote
-npm run ticket -- checklist E001/M001/W001 --promote
+npx specflow checklist E001 --promote
+npx specflow checklist E001/M001 --promote
+npx specflow checklist E001/M001/W001/S001 --promote
+npx specflow checklist E001/M001/W001 --promote
 ```
 
 ## 5. Promote the wave to executable
 
 ```bash
-npm run ticket -- promote E001/M001/W001
+npx specflow promote E001/M001/W001
 # → Wave E001/M001/W001 promoted to ready_to_dev
 ```
 
 ## 6. Claim the wave + flip to in_progress
 
 ```bash
-npm run ticket -- claim E001/M001/W001 me
+npx specflow claim E001/M001/W001 me
 # → Wave E001/M001/W001 claimed by me
-npm run ticket -- status E001/M001/W001 in_progress
+npx specflow status E001/M001/W001 in_progress
 # → Wave E001/M001/W001 status set to in_progress
 ```
 
@@ -64,7 +68,7 @@ For the slice you wrote: write tests first, run them (observe RED), implement th
 # implement the slice's ## Scope
 # re-run the test, observe GREEN
 git commit -m "[E001/M001/W001/S001] add first slice implementation"
-npm run ticket -- slice-done E001/M001/W001/S001
+npx specflow slice-done E001/M001/W001/S001
 # → Slice E001/M001/W001/S001 marked done
 ```
 
@@ -73,7 +77,7 @@ npm run ticket -- slice-done E001/M001/W001/S001
 ```bash
 git push -u origin agent/E001-M001-W001
 # open a PR titled "E001/M001/W001: First wave"
-npm run ticket -- done E001/M001/W001 --branch agent/E001-M001-W001 --pr <pr-url>
+npx specflow done E001/M001/W001 --branch agent/E001-M001-W001 --pr <pr-url>
 # → Wave E001/M001/W001 marked done
 ```
 

@@ -1,21 +1,23 @@
-import { resolve, join, basename } from 'path';
-import { existsSync, readFileSync, writeFileSync, globSync } from 'fs';
-import { createBacklogDb, schema } from '../src/backlog/db.js';
-import { fullSync, targetedSync } from '../src/backlog/sync.js';
+#!/usr/bin/env node
+import { resolve, join, basename, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { existsSync, readFileSync, writeFileSync, globSync, mkdirSync, copyFileSync } from 'fs';
+import { createBacklogDb, schema } from './backlog/db.js';
+import { fullSync, targetedSync } from './backlog/sync.js';
 import {
   promoteWave, claimWave, setWaveStatus, completeWave,
   resetWave, markSliceDone, getWaveDetail,
   deriveMilestoneStatus, deriveEpicStatus,
-} from '../src/backlog/state.js';
-import { classifyFile } from '../src/backlog/parser.js';
+} from './backlog/state.js';
+import { classifyFile } from './backlog/parser.js';
 import {
   epicFrontmatter,
   milestoneFrontmatter,
   waveFrontmatter,
   sliceFrontmatter,
-} from '../src/backlog/frontmatter.js';
-import { checkEpic, checkMilestone, checkWave, checkSlice } from '../src/backlog/checklist.js';
-import { selectVcs } from '../src/backlog/vcs-select.js';
+} from './backlog/frontmatter.js';
+import { checkEpic, checkMilestone, checkWave, checkSlice } from './backlog/checklist.js';
+import { selectVcs } from './backlog/vcs-select.js';
 import {
   createEpicAction,
   createMilestoneAction,
@@ -23,20 +25,39 @@ import {
   createSliceAction,
   validateAndFixAction,
   markDoneAction,
-} from '../src/backlog/cli-actions.js';
+} from './backlog/cli-actions.js';
 import { eq } from 'drizzle-orm';
 import matter from 'gray-matter';
 
-const PROJECT_ROOT = resolve(import.meta.dirname, '..');
-const BACKLOG_DIR = join(PROJECT_ROOT, 'backlog');
-const DB_PATH = join(PROJECT_ROOT, 'backlog.sqlite');
-const TEMPLATES_DIR = join(BACKLOG_DIR, 'templates');
+// CWD = the user's project where they run `specflow ...`.
+// PACKAGE_DIR = where this CLI lives (so we can resolve bundled templates/).
+const CWD = process.cwd();
+const BACKLOG_DIR = join(CWD, 'backlog');
+const DB_PATH = join(CWD, 'backlog.sqlite');
+const LOCAL_TEMPLATES_DIR = join(BACKLOG_DIR, 'templates');
+const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const PACKAGE_TEMPLATES_DIR = join(PACKAGE_DIR, 'templates');
 
-const { db, close } = createBacklogDb(DB_PATH);
+// Prefer the project's own templates/ if present; otherwise fall back to bundled.
+const TEMPLATES_DIR = existsSync(LOCAL_TEMPLATES_DIR)
+  ? LOCAL_TEMPLATES_DIR
+  : PACKAGE_TEMPLATES_DIR;
 
 const [, , command, ...args] = process.argv;
 
-const vcs = selectVcs(args, process.env, { cwd: PROJECT_ROOT });
+// `init` runs before db init — it creates the structure to operate on.
+if (command === 'init') {
+  cmdInit();
+  process.exit(0);
+}
+
+if (!command || command === '--help' || command === '-h') {
+  printUsage();
+  process.exit(command ? 0 : 1);
+}
+
+const { db, close } = createBacklogDb(DB_PATH);
+const vcs = selectVcs(args, process.env, { cwd: CWD });
 
 await (async () => {
   try {
@@ -56,13 +77,80 @@ await (async () => {
       case 'validate': await cmdValidate(); break;
       default:
         console.error(`Unknown command: ${command}`);
-        console.error('Usage: npm run ticket <list|show|promote|claim|status|done|slice-done|reset|create|mark-done|checklist|sync|validate>');
+        printUsage();
         process.exit(1);
     }
   } finally {
     close();
   }
 })();
+
+function printUsage() {
+  console.error(`Usage: specflow <command> [args]
+
+Commands:
+  init                                          Bootstrap backlog/ structure with templates
+  list [--status <s>]                           List epics/milestones/waves
+  show <wave-id>                                Show wave detail
+  create epic "<title>"                         Create new epic
+  create milestone <epic-id> "<title>"          Create new milestone
+  create wave <epic-id>/<milestone-id> "<title>" Create new wave
+  create slice <e>/<m>/<w> "<title>"            Create new slice
+  promote <wave-id>                             Promote wave to ready_to_dev
+  claim <wave-id> <agent-id>                    Claim wave for an agent
+  status <wave-id> <status>                     Set wave runtime status
+  done <wave-id> --branch <b> --pr <url>        Mark wave done
+  slice-done <slice-id>                         Mark slice done
+  reset <wave-id>                               Reset wave to draft
+  mark-done <id> --reason "<text>"              Manual override (epic/milestone)
+  checklist <id> [--promote]                    Run readiness checks
+  sync                                          Rebuild SQLite from markdown
+  validate [--fix]                              Validate frontmatter
+`);
+}
+
+// --- init ---
+
+function cmdInit() {
+  const created: string[] = [];
+  const skipped: string[] = [];
+
+  if (!existsSync(BACKLOG_DIR)) {
+    mkdirSync(BACKLOG_DIR, { recursive: true });
+    created.push('backlog/');
+  } else {
+    skipped.push('backlog/ (exists)');
+  }
+
+  if (!existsSync(LOCAL_TEMPLATES_DIR)) {
+    mkdirSync(LOCAL_TEMPLATES_DIR, { recursive: true });
+    created.push('backlog/templates/');
+  }
+
+  for (const name of ['epic.md', 'milestone.md', 'wave.md', 'slice.md']) {
+    const target = join(LOCAL_TEMPLATES_DIR, name);
+    const source = join(PACKAGE_TEMPLATES_DIR, name);
+    if (existsSync(target)) {
+      skipped.push(`backlog/templates/${name} (exists)`);
+      continue;
+    }
+    if (!existsSync(source)) {
+      console.error(`✗ Bundled template missing: ${source}`);
+      process.exit(1);
+    }
+    copyFileSync(source, target);
+    created.push(`backlog/templates/${name}`);
+  }
+
+  for (const item of created) console.log(`✓ Created ${item}`);
+  for (const item of skipped) console.log(`  Skipped ${item}`);
+
+  if (created.length > 0) {
+    console.log('\nNext: specflow create epic "<title>"');
+  } else {
+    console.log('\nAlready initialized.');
+  }
+}
 
 // --- Helpers for path lookup with 4-level hierarchy ---
 
@@ -147,7 +235,7 @@ function cmdList() {
 }
 
 function cmdShow(id: string) {
-  if (!id) { console.error('Usage: ticket show <wave-id>'); process.exit(1); }
+  if (!id) { console.error('Usage: specflow show <wave-id>'); process.exit(1); }
 
   // Targeted sync for this wave's epic
   targetedSync(db, BACKLOG_DIR, id);
@@ -174,21 +262,21 @@ function cmdShow(id: string) {
 // --- State commands ---
 
 function cmdPromote(id: string) {
-  if (!id) { console.error('Usage: ticket promote <wave-id>'); process.exit(1); }
+  if (!id) { console.error('Usage: specflow promote <wave-id>'); process.exit(1); }
   const result = promoteWave(db, id);
   if (!result.ok) { console.error(`Error: ${result.error}`); process.exit(1); }
   console.log(`Wave ${id} promoted to ready_to_dev`);
 }
 
 function cmdClaim(id: string, agentId: string) {
-  if (!id || !agentId) { console.error('Usage: ticket claim <wave-id> <agent-id>'); process.exit(1); }
+  if (!id || !agentId) { console.error('Usage: specflow claim <wave-id> <agent-id>'); process.exit(1); }
   const result = claimWave(db, id, agentId);
   if (!result.ok) { console.error(`Error: ${result.error}`); process.exit(1); }
   console.log(`Wave ${id} claimed by ${agentId}`);
 }
 
 function cmdStatus(id: string, status: string) {
-  if (!id || !status) { console.error('Usage: ticket status <wave-id> <status>'); process.exit(1); }
+  if (!id || !status) { console.error('Usage: specflow status <wave-id> <status>'); process.exit(1); }
   const result = setWaveStatus(db, id, status);
   if (!result.ok) { console.error(`Error: ${result.error}`); process.exit(1); }
   console.log(`Wave ${id} status set to ${status}`);
@@ -201,28 +289,28 @@ function cmdDone(rawArgs: string[]) {
   const branch = branchIdx >= 0 ? rawArgs[branchIdx + 1] : undefined;
   const pr = prIdx >= 0 ? rawArgs[prIdx + 1] : undefined;
 
-  if (!id || !branch || !pr) { console.error('Usage: ticket done <wave-id> --branch <branch> --pr <url>'); process.exit(1); }
+  if (!id || !branch || !pr) { console.error('Usage: specflow done <wave-id> --branch <branch> --pr <url>'); process.exit(1); }
   const result = completeWave(db, id, branch, pr);
   if (!result.ok) { console.error(`Error: ${result.error}`); process.exit(1); }
   console.log(`Wave ${id} marked done`);
 }
 
 function cmdSliceDone(id: string) {
-  if (!id) { console.error('Usage: ticket slice-done <slice-id>'); process.exit(1); }
+  if (!id) { console.error('Usage: specflow slice-done <slice-id>'); process.exit(1); }
   const result = markSliceDone(db, id);
   if (!result.ok) { console.error(`Error: ${result.error}`); process.exit(1); }
   console.log(`Slice ${id} marked done`);
 }
 
 function cmdReset(id: string) {
-  if (!id) { console.error('Usage: ticket reset <wave-id>'); process.exit(1); }
+  if (!id) { console.error('Usage: specflow reset <wave-id>'); process.exit(1); }
   const result = resetWave(db, id);
   if (!result.ok) { console.error(`Error: ${result.error}`); process.exit(1); }
   console.log(`Wave ${id} reset to draft`);
 
   // Print cleanup warnings
   const waveSlug = id.replaceAll('/', '-');
-  const projectName = basename(PROJECT_ROOT);
+  const projectName = basename(CWD);
   console.log(`\n⚠ Worktree may still exist. Run: git worktree remove ../${projectName}-agent-${waveSlug}`);
   console.log(`⚠ Branch may still exist. Run: git branch -D agent/${waveSlug}`);
 }
@@ -233,13 +321,13 @@ async function cmdMarkDone(rawArgs: string[]) {
   const reason = reasonIdx >= 0 ? rawArgs[reasonIdx + 1] : undefined;
 
   if (!id || !reason) {
-    console.error('Usage: ticket mark-done <epic-id|epic-id/milestone-id> --reason "<text>"');
+    console.error('Usage: specflow mark-done <epic-id|epic-id/milestone-id> --reason "<text>"');
     process.exit(1);
   }
 
   await markDoneAction({
     vcs,
-    projectRoot: PROJECT_ROOT,
+    projectRoot: CWD,
     backlogDir: BACKLOG_DIR,
     id,
     reason,
@@ -251,12 +339,12 @@ async function cmdMarkDone(rawArgs: string[]) {
 // --- Create commands ---
 
 async function cmdCreate(type: string, createArgs: string[]) {
-  if (!type) { console.error('Usage: ticket create <epic|milestone|wave|slice> ...'); process.exit(1); }
-  const baseDeps = { vcs, projectRoot: PROJECT_ROOT, backlogDir: BACKLOG_DIR, templatesDir: TEMPLATES_DIR };
+  if (!type) { console.error('Usage: specflow create <epic|milestone|wave|slice> ...'); process.exit(1); }
+  const baseDeps = { vcs, projectRoot: CWD, backlogDir: BACKLOG_DIR, templatesDir: TEMPLATES_DIR };
 
   if (type === 'epic') {
     const title = createArgs[0];
-    if (!title) { console.error('Usage: ticket create epic "<title>"'); process.exit(1); }
+    if (!title) { console.error('Usage: specflow create epic "<title>"'); process.exit(1); }
     const { id } = await createEpicAction({ ...baseDeps, title });
     fullSync(db, BACKLOG_DIR);
     console.log(`Created ${id}: ${title}`);
@@ -264,7 +352,7 @@ async function cmdCreate(type: string, createArgs: string[]) {
   } else if (type === 'milestone') {
     const epicId = createArgs[0];
     const title = createArgs[1];
-    if (!epicId || !title) { console.error('Usage: ticket create milestone <epic-id> "<title>"'); process.exit(1); }
+    if (!epicId || !title) { console.error('Usage: specflow create milestone <epic-id> "<title>"'); process.exit(1); }
     const { id } = await createMilestoneAction({ ...baseDeps, epicId, title });
     fullSync(db, BACKLOG_DIR);
     console.log(`Created ${id}: ${title}`);
@@ -272,7 +360,7 @@ async function cmdCreate(type: string, createArgs: string[]) {
   } else if (type === 'wave') {
     const parentId = createArgs[0];
     const title = createArgs[1];
-    if (!parentId || !title) { console.error('Usage: ticket create wave <epic-id>/<milestone-id> "<title>"'); process.exit(1); }
+    if (!parentId || !title) { console.error('Usage: specflow create wave <epic-id>/<milestone-id> "<title>"'); process.exit(1); }
     const { id } = await createWaveAction({ ...baseDeps, parentId, title });
     fullSync(db, BACKLOG_DIR);
     console.log(`Created ${id}: ${title}`);
@@ -280,7 +368,7 @@ async function cmdCreate(type: string, createArgs: string[]) {
   } else if (type === 'slice') {
     const parentId = createArgs[0];
     const title = createArgs[1];
-    if (!parentId || !title) { console.error('Usage: ticket create slice <epic-id>/<milestone-id>/<wave-id> "<title>"'); process.exit(1); }
+    if (!parentId || !title) { console.error('Usage: specflow create slice <epic-id>/<milestone-id>/<wave-id> "<title>"'); process.exit(1); }
     const { id } = await createSliceAction({ ...baseDeps, parentId, title });
     fullSync(db, BACKLOG_DIR);
     console.log(`Created ${id}: ${title}`);
@@ -294,7 +382,7 @@ async function cmdCreate(type: string, createArgs: string[]) {
 // --- Checklist command ---
 
 function cmdChecklist(id: string, promote: boolean) {
-  if (!id) { console.error('Usage: ticket checklist <id> [--promote]'); process.exit(1); }
+  if (!id) { console.error('Usage: specflow checklist <id> [--promote]'); process.exit(1); }
 
   const parts = id.split('/');
   let filePath: string;
@@ -387,7 +475,7 @@ async function cmdValidate() {
   if (fix) {
     const { errors, fixed } = await validateAndFixAction({
       vcs,
-      projectRoot: PROJECT_ROOT,
+      projectRoot: CWD,
       backlogDir: BACKLOG_DIR,
     });
     if (fixed > 0) {
