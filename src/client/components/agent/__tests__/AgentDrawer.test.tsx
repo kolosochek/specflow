@@ -140,4 +140,44 @@ describe('AgentDrawer', () => {
     render(<AgentDrawer />);
     expect(queryOptions?.refetchInterval).toBe(3000);
   });
+
+  it('dead session row shows exit code in the Dead? column', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: dead pane visibility — paneDead=true sessions surface their exit code
+    // INPUT: list returns one session with paneDead=true and exitCode=42
+    // EXPECTED: row contains the literal "dead (42)"
+    listData = [makeSession({ sessionName: 'agent-Q', paneDead: true, exitCode: 42 })];
+    render(<AgentDrawer />);
+    const row = screen.getByText(/dead \(42\)/);
+    expect(row).toBeInTheDocument();
+  });
+
+  it('toggle terminal off after toggling on hides the terminal', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: open-terminal toggle is symmetric — second click collapses
+    // INPUT: click open-terminal twice
+    // EXPECTED: terminal element absent after second click
+    listData = [makeSession({ sessionName: 'agent-T' })];
+    render(<AgentDrawer />);
+    fireEvent.click(screen.getByTestId('open-terminal-agent-T'));
+    expect(screen.getByTestId('xterm-terminal')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('open-terminal-agent-T'));
+    expect(screen.queryByTestId('xterm-terminal')).not.toBeInTheDocument();
+  });
+
+  it('rendering only one session does not surface other sessions', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: per-row isolation — clicking one session does not open another's terminal
+    // INPUT: 2 sessions, click only agent-A's open-terminal
+    // EXPECTED: agent-A's terminal is open, agent-B's is not
+    listData = [
+      makeSession({ sessionName: 'agent-A', waveId: 'E001/M001/W001' }),
+      makeSession({ sessionName: 'agent-B', waveId: 'E001/M002/W001' }),
+    ];
+    render(<AgentDrawer />);
+    fireEvent.click(screen.getByTestId('open-terminal-agent-A'));
+    const terminals = screen.getAllByTestId('xterm-terminal');
+    expect(terminals).toHaveLength(1);
+    expect(terminals[0]).toHaveAttribute('data-session', 'agent-A');
+  });
 });

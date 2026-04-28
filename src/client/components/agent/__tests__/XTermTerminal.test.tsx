@@ -150,4 +150,54 @@ describe('XTermTerminal', () => {
     vi.advanceTimersByTime(8000);
     expect(wsInstances).toHaveLength(1);
   });
+
+  it('reconnect backoff progresses 1s → 2s → 4s for repeated non-1000 closes', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: backoff progression
+    // INPUT: 3 successive non-1000 closes; advance fake timers each time
+    // EXPECTED: reconnect attempts land at the documented intervals
+    render(<XTermTerminal sessionName="agent-X" />);
+    expect(wsInstances).toHaveLength(1);
+    wsInstances[0].onclose?.({ code: 1006 });
+    vi.advanceTimersByTime(999);
+    expect(wsInstances).toHaveLength(1);
+    vi.advanceTimersByTime(2);
+    expect(wsInstances).toHaveLength(2);
+    wsInstances[1].onclose?.({ code: 1006 });
+    vi.advanceTimersByTime(1999);
+    expect(wsInstances).toHaveLength(2);
+    vi.advanceTimersByTime(2);
+    expect(wsInstances).toHaveLength(3);
+    wsInstances[2].onclose?.({ code: 1006 });
+    vi.advanceTimersByTime(3999);
+    expect(wsInstances).toHaveLength(3);
+    vi.advanceTimersByTime(2);
+    expect(wsInstances).toHaveLength(4);
+  });
+
+  it('uses wss:// when the page protocol is https', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: protocol selection — secure page upgrades the WS scheme
+    // INPUT: window.location.protocol = 'https:'
+    // EXPECTED: WS URL begins with wss://
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { protocol: 'https:', host: 'kanban.example' },
+    });
+    render(<XTermTerminal sessionName="agent-X" />);
+    expect(wsInstances[0].url.startsWith('wss://')).toBe(true);
+    expect(wsInstances[0].url).toContain('kanban.example');
+  });
+
+  it('unmount during a pending reconnect cancels the reconnect timer', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: lifecycle correctness — no zombie reconnect after unmount
+    // INPUT: trigger non-1000 close, then unmount before the timer fires
+    // EXPECTED: advancing past the backoff does NOT spawn a new WebSocket
+    const { unmount } = render(<XTermTerminal sessionName="agent-X" />);
+    wsInstances[0].onclose?.({ code: 1006 });
+    unmount();
+    vi.advanceTimersByTime(2000);
+    expect(wsInstances).toHaveLength(1);
+  });
 });

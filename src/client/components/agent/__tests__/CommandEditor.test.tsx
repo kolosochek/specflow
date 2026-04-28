@@ -135,6 +135,45 @@ describe('CommandEditor', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('renders no preflight panel before the query resolves', () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: pre-load state — preflightData is undefined while query is in flight
+    // INPUT: render with preflightData unset
+    // EXPECTED: branch-status / worktree-status testids are absent
+    preflightData = undefined;
+    render(<CommandEditor waveId="E001/M001/W001" open onClose={vi.fn()} />);
+    expect(screen.queryByTestId('branch-status')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('worktree-status')).not.toBeInTheDocument();
+  });
+
+  it('successful spawn after a previous error clears the error alert', async () => {
+    // SCENARIO->INPUT->EXPECTED
+    // SCENARIO: error state is cleared on next successful spawn (no stale alert)
+    // INPUT: spawn rejects once, then user retries with success
+    // EXPECTED: alert visible after first attempt, gone after second; onClose called once
+    preflightData = {
+      branchExists: true,
+      worktreeExists: true,
+      branchName: 'agent/X',
+      worktreePath: '/tmp/x',
+      suggestedCommand: 'claude X',
+    };
+    spawnMutateSpy
+      .mockRejectedValueOnce(new Error('Max 3 agent sessions running'))
+      .mockResolvedValueOnce({ sessionName: 'agent-X' });
+    const onClose = vi.fn();
+    render(<CommandEditor waveId="E001/M001/W001" open onClose={onClose} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('run-agent'));
+    });
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('run-agent'));
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('Cancel button closes dialog without invoking spawn', () => {
     // SCENARIO->INPUT->EXPECTED
     // SCENARIO: Cancel just closes the dialog
