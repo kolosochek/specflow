@@ -128,24 +128,24 @@ describe('cmdValidate parity (S002)', () => {
     expect(sliceFrontmatter.safeParse(sliceInput).success).toBe(true);
   });
 
-  it('ticket.ts schemaMap imports the canonical exports rather than re-declaring them', () => {
+  it('src/cli.ts schemaMap imports the canonical exports rather than re-declaring them', () => {
     // SCENARIO->INPUT->EXPECTED
-    // SCENARIO: ticket.ts schemaMap entries reference the canonical exports
+    // SCENARIO: src/cli.ts schemaMap entries reference the canonical exports
     // INPUT: import the four schemas used by cmdValidate after this slice
     // EXPECTED: each is referentially equal to the corresponding export from src/backlog/frontmatter.ts (no re-declaration)
-    const ticketSrc = readFileSync(
-      join(process.cwd(), 'scripts', 'ticket.ts'),
+    const cliSrc = readFileSync(
+      join(process.cwd(), 'src', 'cli.ts'),
       'utf-8',
     );
-    expect(ticketSrc).toMatch(/from ['"]\.\.\/src\/backlog\/frontmatter\.js['"]/);
-    expect(ticketSrc).toMatch(/epicFrontmatter/);
-    expect(ticketSrc).toMatch(/milestoneFrontmatter/);
-    expect(ticketSrc).toMatch(/waveFrontmatter/);
-    expect(ticketSrc).toMatch(/sliceFrontmatter/);
-    expect(ticketSrc).not.toMatch(/const\s+epicFm\s*=\s*z\.object/);
-    expect(ticketSrc).not.toMatch(/const\s+milestoneFm\s*=\s*z\.object/);
-    expect(ticketSrc).not.toMatch(/const\s+waveFm\s*=\s*z\.object/);
-    expect(ticketSrc).not.toMatch(/const\s+sliceFm\s*=\s*z\.object/);
+    expect(cliSrc).toMatch(/from ['"]\.\/backlog\/frontmatter\.js['"]/);
+    expect(cliSrc).toMatch(/epicFrontmatter/);
+    expect(cliSrc).toMatch(/milestoneFrontmatter/);
+    expect(cliSrc).toMatch(/waveFrontmatter/);
+    expect(cliSrc).toMatch(/sliceFrontmatter/);
+    expect(cliSrc).not.toMatch(/const\s+epicFm\s*=\s*z\.object/);
+    expect(cliSrc).not.toMatch(/const\s+milestoneFm\s*=\s*z\.object/);
+    expect(cliSrc).not.toMatch(/const\s+waveFm\s*=\s*z\.object/);
+    expect(cliSrc).not.toMatch(/const\s+sliceFm\s*=\s*z\.object/);
   });
 
   it('missing status field is backfilled by the imported schema default to empty', () => {

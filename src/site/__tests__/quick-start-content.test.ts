@@ -5,7 +5,7 @@ import { resolve } from 'path';
 const QS_PATH = resolve(process.cwd(), 'docs-site/quick-start.md');
 
 // CLI command keywords. The status-transition command is identified by the
-// `in_progress` keyword (the actual CLI form is `ticket status <id> in_progress`,
+// `in_progress` keyword (the actual CLI form is `specflow status <id> in_progress`,
 // so the words are not contiguous in the page source).
 const REQUIRED_COMMANDS = [
   'create epic',
@@ -17,7 +17,7 @@ const REQUIRED_COMMANDS = [
   ' claim ',
   'in_progress',
   'slice-done',
-  'ticket -- done',
+  'specflow done',
 ];
 
 let qs = '';
