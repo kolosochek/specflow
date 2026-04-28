@@ -15,7 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import { trpc } from '../../trpc.js';
-import { XTermTerminalPlaceholder } from './XTermTerminalPlaceholder.js';
+import { XTermTerminal } from './XTermTerminal.js';
 
 const COLLAPSED_HEIGHT = 28;
 const EXPANDED_HEIGHT = 360;
@@ -109,7 +109,7 @@ export function AgentDrawer() {
                 {openTerminals.has(s.sessionName) && (
                   <TableRow>
                     <TableCell colSpan={5}>
-                      <XTermTerminalPlaceholder sessionName={s.sessionName} />
+                      <XTermTerminal sessionName={s.sessionName} />
                     </TableCell>
                   </TableRow>
                 )}
