@@ -31,7 +31,7 @@ You get back:
 
 - **One file per slice.** A reviewer reads one file and has the goal, the assumptions, the scope, the requirements, the test plan, and the acceptance criteria — the entire decision context — without leaving the editor.
 - **A real audit trail.** Every commit is bracketed with the slice's full composite ID (`[E001/M002/W002/S001] …`); every wave's PR description is generated from spec content; every status change goes through the CLI and is irrefutable.
-- **Framework-enforced TDD.** The protocol forbids writing implementation before tests, forbids modifying tests to make them pass, and forbids skipping the RED phase. Violating these is a process bug even if the code change works. This is rigid by design — it is what produces the dogfood numbers in /benefits.
+- **Framework-enforced TDD.** The protocol forbids writing implementation before tests, forbids modifying tests to make them pass, and forbids skipping the RED phase. Violating these is a process bug even if the code change works. This is rigid by design — it is what produces the delivery cadence documented in the [HH Pipeline case study](/benefits/case-study).
 
 ## Who this is for
 

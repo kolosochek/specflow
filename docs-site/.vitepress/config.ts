@@ -39,7 +39,7 @@ export default defineConfig({
         items: [
           { text: 'TDD discipline', link: '/benefits/tdd-discipline' },
           { text: 'Transparency', link: '/benefits/transparency' },
-          { text: 'Dogfood numbers', link: '/benefits/dogfood-numbers' },
+          { text: 'Production case study', link: '/benefits/case-study' },
         ],
       },
     ],
