@@ -5,8 +5,8 @@
 > **A microframework for spec-driven development.**
 > Formalize a strategic theme once, decompose it into reviewable units of work, and let humans or agents execute it under a strict TDD contract — without ever drifting from the spec.
 
-**Version:** `v0.3.0-alpha`
-**Status:** Web UI lands. Epic → Milestone → Wave → Slice grammar, CLI, tRPC HTTP server, React + MUI kanban board, dogfooded backlog.
+**Version:** `v0.4.0`
+**Status:** Stable. Epic → Milestone → Wave → Slice grammar, CLI, tRPC HTTP server, React + MUI kanban board, agent orchestration (tmux + node-pty + browser xterm), production deployment at [HH Pipeline](https://github.com/kolosochek/hhru).
 
 ## Install
 
@@ -217,13 +217,13 @@ npm run build                # builds dist/client + dist/server
 npm run start                # serves built client from the prod server
 ```
 
-Portability to other stacks (Python, Go) is **not a goal of v0.3**. The grammar of the documents is portable; the CLI/DB/server/UI layers are TypeScript-specific. Sections of the spec that depend on this stack are marked **(reference impl.)**.
+Portability to other stacks (Python, Go) is **not a goal of v0.4**. The grammar of the documents is portable; the CLI/DB/server/UI layers are TypeScript-specific. Sections of the spec that depend on this stack are marked **(reference impl.)**.
 
-## Web UI (v0.3)
+## Web UI
 
 The kanban shows a two-tier filter (epic → milestone) above five status columns (`draft / ready_to_dev / claimed / in_progress / done`). Each wave is a card with title, slice progress, assignee, branch, and PR link. Clicking a card opens a modal with the slice list and a "Show raw markdown" toggle. The `Promote` and `Reset to draft` buttons map directly onto the same gate-checked operations the CLI runs.
 
-Agent orchestration ships in `v0.3` (`E002/M003`): clicking **Run agent** on a `ready_to_dev`-or-later wave opens a CommandEditor with branch/worktree pre-flight, spawns the binary inside a dedicated `tmux` session on a per-wave git worktree, and streams the pty to a browser xterm.js terminal via WebSocket. See the [Lifecycle in pictures](#lifecycle-in-pictures) section above for the full flow.
+Agent orchestration ships in `v0.4` (`E002/M003`): clicking **Run agent** on a `ready_to_dev`-or-later wave opens a CommandEditor with branch/worktree pre-flight, spawns the binary inside a dedicated `tmux` session on a per-wave git worktree, and streams the pty to a browser xterm.js terminal via WebSocket. See the [Lifecycle in pictures](#lifecycle-in-pictures) section above for the full flow.
 
 ## Sample backlog
 
@@ -250,5 +250,5 @@ The repo's own `backlog/` contains [`E001-foundation-hardening`](backlog/E001-fo
 | `v0.1`             | Initial extraction from `hhru`. Three-layer model: Milestone → Wave → Slice.                              |
 | `v0.2`             | **Breaking.** Epic layer added on top. Slash commands. CI. Live backlog. Migration: wrap M001 dirs in E001.|
 | `v0.3.0-alpha`     | tRPC server + React/MUI kanban (M001+M002 of E002). M003 agent orchestration planned in slices.            |
-| `v0.3.0` *(next)*  | M003 implemented — tmux/node-pty agent spawning + live xterm streaming.                                   |
-| `v0.4` *(planned)* | CLI/git decoupling — see [proposal](docs/proposals/cli-vcs-decoupling.md).                                |
+| **`v0.4.0`** *(current)* | E002/M003 agent orchestration shipped — tmux/node-pty session manager, agent tRPC router, WebSocket pty bridge, in-browser xterm. E001 foundation hardening complete (grammar dedup, CLI/VCS decoupling adapter, watcher decision, manual status overrides). E003 public docs site launched with illustrated lifecycle and the [HH Pipeline production case study](https://kolosochek.github.io/specflow/benefits/case-study). |
+| `v0.5` *(planned)* | CLI/git decoupling — see [proposal](docs/proposals/cli-vcs-decoupling.md). Postinstall hardening for node-pty (`E001/M003/W002`).                                |
