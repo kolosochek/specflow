@@ -1,6 +1,6 @@
 {
   "name": "@dkolosovsky/specflow",
-  "version": "0.3.0-alpha",
+  "version": "0.4.0",
   "description": "A microframework for spec-driven development. Epic → Milestone → Wave → Slice with strict TDD execution.",
   "type": "module",
   "license": "MIT",
