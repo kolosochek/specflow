@@ -42,6 +42,62 @@ npm run dev    # tRPC server on :3030, Vite on :5173 with HMR
 
 ---
 
+## Lifecycle in pictures
+
+specflow walks every unit of work through five execution states. The same kanban board renders all of them. Each card is a wave; each column is a state. The screenshots below come from the project's own dogfooded backlog.
+
+![specflow kanban](https://raw.githubusercontent.com/kolosochek/specflow/main/docs/screenshots/01-dashboard-overview.png)
+
+### 1. `draft` — wave just created
+
+`specflow create wave …` writes a `wave_defined`-shaped Markdown file from the template and lands the card in the leftmost column. The body is empty section headings — the author fills them in before promoting.
+
+![draft column](https://raw.githubusercontent.com/kolosochek/specflow/main/docs/screenshots/02-stage-draft.png)
+
+The wave detail modal exposes `Promote` and `Reset to draft` — the same gate-checked operations the CLI runs.
+
+![draft modal](https://raw.githubusercontent.com/kolosochek/specflow/main/docs/screenshots/03-wave-detail-draft.png)
+
+### 2. `ready_to_dev` — readiness gates passed
+
+`promote` checks: wave content `wave_defined`, every child slice `slice_defined`, ≥1 child slice. Failing any condition returns a structured error with no DB mutation. When all pass, the wave moves to `ready_to_dev` and a green **Run agent** button appears.
+
+![ready_to_dev column](https://raw.githubusercontent.com/kolosochek/specflow/main/docs/screenshots/05-stage-ready-to-dev.png)
+
+![ready_to_dev modal with Run agent](https://raw.githubusercontent.com/kolosochek/specflow/main/docs/screenshots/04-stage-ready-to-dev-detail.png)
+
+### 3. `claimed` — an agent picks it up
+
+`specflow claim <wave-id> <agent-id>` records the actor on the card and moves the wave to `claimed`. The card now shows the agent's identifier (`claude-opus-4-7-1m` here).
+
+![claimed column](https://raw.githubusercontent.com/kolosochek/specflow/main/docs/screenshots/06-stage-claimed.png)
+
+### 4. `in_progress` — the agent runs
+
+Clicking **Run agent** opens the CommandEditor: it shows the spawn pre-flight (branch + worktree existence, suggested `claude` command) and lets you tweak the launch command before spawning.
+
+![command editor with preflight](https://raw.githubusercontent.com/kolosochek/specflow/main/docs/screenshots/13-command-editor-preflight.png)
+
+Submitting the command creates a dedicated git worktree, spawns the binary inside a `tmux` session, and pipes the pty to the browser's xterm.js terminal via WebSocket. The agent drawer at the bottom of the UI tracks every live session.
+
+![agent drawer](https://raw.githubusercontent.com/kolosochek/specflow/main/docs/screenshots/15-agent-drawer-with-session.png)
+
+Click `OPEN TERMINAL` to attach. Below, the agent (real Claude Code, Opus 4.7, running headlessly) is answering a prompt inside the worktree — keystrokes flow back through the same socket.
+
+![live xterm](https://raw.githubusercontent.com/kolosochek/specflow/main/docs/screenshots/17-live-agent-terminal.png)
+
+### 5. `done` — wave merged
+
+`specflow done --branch … --pr …` requires every child slice to have `slice_state.status = 'done'`. No bulk shortcut — the only way to finish a wave is to mark each slice individually. The card now carries the agent's id, the branch name, and a clickable `PR` link.
+
+![done column](https://raw.githubusercontent.com/kolosochek/specflow/main/docs/screenshots/10-stage-done.png)
+
+The full board shows the dogfooded backlog — every E001 / E002 / E003 wave was authored, executed, and merged through this exact pipeline.
+
+![full board](https://raw.githubusercontent.com/kolosochek/specflow/main/docs/screenshots/11-final-board.png)
+
+---
+
 ## Why specflow exists
 
 Most ticketing systems (Jira, Linear, GitHub Issues) treat work units as **opaque conversations**: a title, a description, comments, status. They are great for human collaboration but bad for two things:
@@ -167,7 +223,7 @@ Portability to other stacks (Python, Go) is **not a goal of v0.3**. The grammar 
 
 The kanban shows a two-tier filter (epic → milestone) above five status columns (`draft / ready_to_dev / claimed / in_progress / done`). Each wave is a card with title, slice progress, assignee, branch, and PR link. Clicking a card opens a modal with the slice list and a "Show raw markdown" toggle. The `Promote` and `Reset to draft` buttons map directly onto the same gate-checked operations the CLI runs.
 
-Agent orchestration (running Claude Code in detached `tmux` sessions, live xterm.js streaming) is **planned but not yet implemented** — it lives as `E002/M003` in the live backlog with full slice detail, ready to be executed under the agent protocol.
+Agent orchestration ships in `v0.3` (`E002/M003`): clicking **Run agent** on a `ready_to_dev`-or-later wave opens a CommandEditor with branch/worktree pre-flight, spawns the binary inside a dedicated `tmux` session on a per-wave git worktree, and streams the pty to a browser xterm.js terminal via WebSocket. See the [Lifecycle in pictures](#lifecycle-in-pictures) section above for the full flow.
 
 ## Sample backlog
 

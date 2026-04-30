@@ -29,7 +29,9 @@ npx specflow create wave E001/M001 "First wave"
 npx specflow create slice E001/M001/W001 "First slice"
 ```
 
-Each `create` writes a Markdown file from the template and (by default) auto-commits it.
+Each `create` writes a Markdown file from the template and (by default) auto-commits it. Open the kanban (`npm run dev`, then `localhost:5173`) to see the wave land in the leftmost `draft` column:
+
+![draft column](/screenshots/02-stage-draft.png)
 
 ## 4. Author content + promote through readiness
 
@@ -49,6 +51,10 @@ npx specflow promote E001/M001/W001
 # → Wave E001/M001/W001 promoted to ready_to_dev
 ```
 
+The card moves to the `ready_to_dev` column and the modal exposes a green **Run agent** button.
+
+![ready_to_dev with Run agent](/screenshots/04-stage-ready-to-dev-detail.png)
+
 ## 6. Claim the wave + flip to in_progress
 
 ```bash
@@ -57,6 +63,16 @@ npx specflow claim E001/M001/W001 me
 npx specflow status E001/M001/W001 in_progress
 # → Wave E001/M001/W001 status set to in_progress
 ```
+
+![claimed column](/screenshots/06-stage-claimed.png)
+
+::: tip Run agent (UI)
+Instead of `claim` + `status` from the CLI, click **Run agent** on the wave card. The CommandEditor shows pre-flight (branch/worktree status, suggested `claude` command), spawns the binary in a dedicated `tmux` session on a fresh git worktree, and pipes the pty to the browser via WebSocket.
+
+![command editor](/screenshots/13-command-editor-preflight.png)
+
+![live agent xterm](/screenshots/17-live-agent-terminal.png)
+:::
 
 ## 7. Execute the slice — TDD loop
 
@@ -80,6 +96,10 @@ git push -u origin agent/E001-M001-W001
 npx specflow done E001/M001/W001 --branch agent/E001-M001-W001 --pr <pr-url>
 # → Wave E001/M001/W001 marked done
 ```
+
+The card lands in the rightmost `done` column with the agent id, branch, and a clickable `PR` link:
+
+![done column](/screenshots/10-stage-done.png)
 
 ## What just happened?
 

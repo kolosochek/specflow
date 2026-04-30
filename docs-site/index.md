@@ -12,3 +12,17 @@ flowchart LR
 ```
 
 [See what changes](/why) · [Try it in 5 minutes](/quick-start)
+
+---
+
+## What it looks like
+
+The kanban renders the live backlog. Five columns map 1:1 to the wave execution states; each card is one wave with its slice progress, agent claim, branch, and PR link.
+
+![specflow kanban board](/screenshots/11-final-board.png)
+
+Clicking a card opens the wave modal. From `ready_to_dev` onwards, a green **Run agent** spawns Claude Code (or any other binary) inside a dedicated `tmux` session on a per-wave git worktree, with the pty piped to a browser xterm.js terminal.
+
+![live agent in browser xterm](/screenshots/17-live-agent-terminal.png)
+
+[Walk a wave through every state →](/concepts/lifecycle)

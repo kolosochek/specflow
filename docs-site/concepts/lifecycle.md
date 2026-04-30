@@ -72,4 +72,46 @@ stateDiagram-v2
 
 `reset` is the universal escape hatch — it bypasses the whitelist and forces `draft`. Use sparingly; it discards the record of who claimed the wave and what branch was created.
 
+## The state diagram on the actual board
+
+The kanban renders one column per execution state. Watch the same wave move through all five.
+
+### `draft`
+
+The wave was just created. The body is empty section headings; the modal exposes `Promote` and `Reset to draft`.
+
+![draft column](/screenshots/02-stage-draft.png)
+
+![draft modal](/screenshots/03-wave-detail-draft.png)
+
+### `ready_to_dev`
+
+After Gate 1 passes, the wave moves right and a green **Run agent** appears.
+
+![ready_to_dev column](/screenshots/05-stage-ready-to-dev.png)
+
+![ready_to_dev modal](/screenshots/04-stage-ready-to-dev-detail.png)
+
+### `claimed`
+
+`claim` records the actor. The card now shows the agent identifier.
+
+![claimed column](/screenshots/06-stage-claimed.png)
+
+### `in_progress`
+
+`Run agent` (or `status in_progress` from the CLI) flips the wave to `in_progress`. The agent drawer at the bottom of the UI tracks every live `tmux` session; clicking `OPEN TERMINAL` attaches the pty to a browser xterm.
+
+![command editor preflight](/screenshots/13-command-editor-preflight.png)
+
+![agent drawer with live session](/screenshots/15-agent-drawer-with-session.png)
+
+![live agent terminal](/screenshots/17-live-agent-terminal.png)
+
+### `done`
+
+`done --branch … --pr …` (Gate 2) requires every slice marked `done`. The card carries the agent id, branch, and PR link.
+
+![done column](/screenshots/10-stage-done.png)
+
 [Deep-dive: docs/lifecycle.md](../docs/lifecycle.md)
