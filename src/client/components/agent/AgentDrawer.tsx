@@ -64,6 +64,20 @@ export function AgentDrawer() {
         borderTop: '1px solid #334155',
         overflowY: 'auto',
         zIndex: 1100,
+        '& .MuiTableCell-root': {
+          color: '#e2e8f0',
+          borderColor: '#334155',
+        },
+        '& .MuiTableCell-head': {
+          color: '#94a3b8',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          fontSize: '0.7rem',
+          letterSpacing: '0.05em',
+        },
+        '& .MuiButton-root, & .MuiIconButton-root': {
+          color: '#7dd3fc',
+        },
       }}
     >
       {isEmpty ? (
