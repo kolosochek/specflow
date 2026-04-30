@@ -1,7 +1,7 @@
 ---
 title: Replace duplicate Zod block in ticket.ts cmdValidate
-created: 2026-04-27
-status: empty
+created: 2026-04-27T00:00:00.000Z
+status: slice_defined
 ---
 
 ## Context
@@ -32,6 +32,8 @@ After S001 ships, `src/backlog/frontmatter.ts` is the canonical schema source. `
 - Cases:
   - SCENARIO: cmdValidate-style validation rejects same shape as before — INPUT: object missing `title` field, validated through both the old (snapshot) and new (imported) schema — EXPECTED: both return `success: false` with the same issue path
   - SCENARIO: cmdValidate-style validation accepts same shape as before — INPUT: object with all required fields — EXPECTED: both return `success: true`
+  - SCENARIO: ticket.ts schemaMap entries reference the canonical exports — INPUT: import the four schemas used by `cmdValidate` after this slice — EXPECTED: each is referentially equal to the corresponding export from `src/backlog/frontmatter.ts` (no re-declaration)
+  - SCENARIO: missing `status` field is backfilled by the imported schema's default — INPUT: parse `{ title: 'X', created: '2026-04-27' }` through `waveFrontmatter` — EXPECTED: parsed result has `status: 'empty'` (matches v0.2 `--fix` behavior)
 
 ## Acceptance criteria
 

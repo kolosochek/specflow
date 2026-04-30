@@ -1,7 +1,7 @@
 ---
 title: Define VcsAdapter interface and GitAdapter implementation
-created: 2026-04-27
-status: empty
+created: 2026-04-27T00:00:00.000Z
+status: slice_defined
 ---
 
 ## Context
@@ -39,6 +39,7 @@ The `VcsAdapter` interface is the seam through which all VCS interaction will fl
   - SCENARIO: commit on dirty staging area succeeds — INPUT: file pre-staged, call `commit('m')` — EXPECTED: commit recorded
   - SCENARIO: commit when nothing staged rejects — INPUT: clean repo, call `commit('m')` — EXPECTED: promise rejects with stderr message
   - SCENARIO: openWorktree creates branch + worktree — INPUT: branch name not yet existing — EXPECTED: `git branch` lists it, `git worktree list` shows the dir
+  - SCENARIO: openWorktree on an existing branch omits `-b` — INPUT: branch already created in the tmp repo, call `openWorktree(branch, dir)` — EXPECTED: a worktree is added at `dir` checked out on the existing branch; no error about "branch already exists"
   - SCENARIO: removeWorktree cleans up — INPUT: previously added worktree — EXPECTED: `git worktree list` no longer shows it
 
 ## Acceptance criteria

@@ -1,7 +1,7 @@
 ---
 title: Implement the chosen path
-created: 2026-04-27
-status: empty
+created: 2026-04-27T00:00:00.000Z
+status: slice_defined
 ---
 
 ## Context
@@ -30,12 +30,13 @@ S001 has produced `docs/proposals/watcher-fate.md` with a chosen option. This sl
 
 ## Test expectations
 
-- `src/backlog/__tests__/watcher.test.ts` — new file (if expose) **or** removed/skipped (if remove)
-- Run: `npx vitest run src/backlog/__tests__/watcher.test.ts` (if expose)
-- Cases (if expose):
-  - SCENARIO: starting then stopping the watcher leaves no leaked timers — INPUT: call start, then stop, then check `process._getActiveHandles().length` delta — EXPECTED: 0
-  - SCENARIO: a new slice file appears and is synced — INPUT: tmp backlog, watcher running, write a new `S001-x.md` — EXPECTED: within 500ms, the slice row exists in the test DB
-  - SCENARIO: a slice file is deleted and is desynced — INPUT: existing slice file removed — EXPECTED: within 500ms, the slice row is gone from DB
+- `src/backlog/__tests__/watcher-removal.test.ts` — new file: post-removal regression assertions on the codebase shape
+- Run: `npx vitest run src/backlog/__tests__/watcher-removal.test.ts`
+- Cases:
+  - SCENARIO: watcher source file is gone — INPUT: check `existsSync('src/backlog/watcher.ts')` from project root — EXPECTED: `false`
+  - SCENARIO: chokidar is no longer a runtime dependency — INPUT: parse `package.json`, read `dependencies` — EXPECTED: no `chokidar` key in `dependencies`
+  - SCENARIO: no production code imports the deleted watcher — INPUT: grep `from '\./watcher` / `from '../backlog/watcher` across `src/` — EXPECTED: no matches outside the deleted file
+  - SCENARIO: docs/cli.md does not advertise a `watch` command — INPUT: read `docs/cli.md` — EXPECTED: no occurrence of `npm run ticket watch` or a `watch` subcommand entry
 
 ## Acceptance criteria
 

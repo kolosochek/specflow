@@ -1,7 +1,7 @@
 ---
 title: Port TmuxManager with 4-level session-name format
-created: 2026-04-27
-status: empty
+created: 2026-04-27T00:00:00.000Z
+status: slice_defined
 ---
 
 ## Context

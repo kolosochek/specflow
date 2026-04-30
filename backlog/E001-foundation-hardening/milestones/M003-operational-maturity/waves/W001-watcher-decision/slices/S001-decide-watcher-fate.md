@@ -1,7 +1,7 @@
 ---
 title: Decide watcher fate — write the rationale
-created: 2026-04-27
-status: empty
+created: 2026-04-27T00:00:00.000Z
+status: slice_defined
 ---
 
 ## Context
@@ -33,6 +33,7 @@ Before touching code, the agent picks one of the two options and writes the rati
   - SCENARIO: decision record exists — INPUT: read `docs/proposals/watcher-fate.md` — EXPECTED: file readable, length > 200 bytes
   - SCENARIO: decision record names a chosen option — INPUT: read file content — EXPECTED: contains either "Decision: expose" or "Decision: remove" (case-insensitive substring)
   - SCENARIO: decision record references S002 — INPUT: read file content — EXPECTED: contains "S002" or the slice slug
+  - SCENARIO: decision record names a rejected alternative — INPUT: read file content — EXPECTED: contains a section or sentence labelled "Alternative" / "Alternatives" / "Rejected" naming a concrete option that was considered and not chosen
 
 ## Acceptance criteria
 
